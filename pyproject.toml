@@ -14,3 +14,6 @@ dependencies = [
     "python-dotenv",
     "huggingface_hub",
 ]
+
+[tool.setuptools]
+packages = ["core"]
