@@ -1,5 +1,6 @@
 from vllm import LLM, SamplingParams
 from .config import settings
+from .schemas import LLMGenerationRequest
 
 class LLMService:
     def __init__(self):
@@ -10,13 +11,13 @@ class LLMService:
             download_dir=settings.model_cache_dir,
         )
 
-    def generate(self, prompt: str, max_tokens: int = 1024, temperature: float = 0.7, stop: list[str] = None):
+    def generate(self, request: LLMGenerationRequest):
         sampling_params = SamplingParams(
-            max_tokens=max_tokens,
-            temperature=temperature,
-            stop=stop,
+            max_tokens=request.max_tokens,
+            temperature=request.temperature,
+            stop=request.stop,
         )
-        outputs = self.llm.generate(prompt, sampling_params)
+        outputs = self.llm.generate(request.prompt, sampling_params)
         return outputs[0].outputs[0].text
 
 llm_service = LLMService() 
