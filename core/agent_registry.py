@@ -14,6 +14,4 @@ class AgentRegistry:
         return self._agents.get(agent_name)
 
     def list_agents(self) -> List[Agent]:
-        return list(self._agents.values())
-
-agent_registry = AgentRegistry() 
+        return list(self._agents.values()) 

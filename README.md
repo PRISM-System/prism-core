@@ -246,6 +246,56 @@ class OrchestrationAgent(BaseAgent):
 
 ```
 
+## 라이브러리로 사용하기
+
+`prism-core`는 각 에이전트 구현 시 라이브러리로 설치하여 사용할 수 있습니다.
+
+### 1. 설치
+
+```bash
+pip install git+https://github.com/your-repo/prism.git#subdirectory=prism-core
+```
+### 2. FastAPI 프로젝트에 통합하기
+
+다음은 `prism-core`를 사용하여 자신만의 FastAPI 애플리케이션을 만드는 예시입니다.
+
+**`my_app.py` 예시:**
+```python
+from fastapi import FastAPI
+from prism_core.core.llm_service import LLMService
+from prism_core.core.agent_registry import AgentRegistry
+from prism_core.core.api import create_api_router
+from prism_core.core.schemas import Agent
+
+# 1. FastAPI 앱 생성
+app = FastAPI(title="My Custom Agent Service")
+
+# 2. 핵심 서비스 인스턴스화
+# 필요에 따라 설정을 커스터마이징할 수 있습니다.
+llm_service = LLMService()
+agent_registry = AgentRegistry()
+
+# 3. prism-core API 라우터 생성 및 포함
+# 생성한 서비스 인스턴스를 라우터 팩토리 함수에 전달합니다.
+api_router = create_api_router(agent_registry, llm_service)
+app.include_router(api_router, prefix="/api")
+
+# 4. (선택) 시작 시 기본 에이전트 등록
+@app.on_event("startup")
+async def startup_event():
+    safety_agent_data = {
+        "name": "safety_protocol_assistant",
+        "description": "반도체 공정 중 발생할 수 있는 안전 문제에 대한 수칙을 안내하는 에이전트",
+        "role_prompt": "당신은 반도체 공정 안전 전문가입니다. 사용자의 질문에 대해 안전 수칙을 명확하고 간결하게 설명해야 합니다."
+    }
+    safety_agent = Agent(**safety_agent_data)
+    agent_registry.register_agent(safety_agent)
+    print("Default agent 'safety_protocol_assistant' registered.")
+
+# 5. 서버 실행
+# uvicorn my_app:app --reload
+```
+
 ## API 엔드포인트 요약
 
 - `POST /agents`: 새로운 에이전트를 등록합니다.

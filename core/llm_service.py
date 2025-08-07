@@ -18,6 +18,4 @@ class LLMService:
             stop=request.stop,
         )
         outputs = self.llm.generate(request.prompt, sampling_params)
-        return outputs[0].outputs[0].text
-
-llm_service = LLMService() 
+        return outputs[0].outputs[0].text 
