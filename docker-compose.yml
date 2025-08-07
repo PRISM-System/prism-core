@@ -1,0 +1,21 @@
+services:
+  llm_agent:
+    build:
+      context: .
+      args:
+        - HUGGING_FACE_TOKEN=${HUGGING_FACE_TOKEN}
+    env_file:
+      - .env
+    ports:
+      - "8000:8000"
+    volumes:
+      - /CACHE/MODELS:/CACHE/MODELS
+      - ~/.cache/huggingface:/root/.cache/huggingface
+    deploy:
+      resources:
+        reservations:
+          devices:
+            - driver: nvidia
+              count: all
+              capabilities: [gpu]
+    command: ./run.sh 
