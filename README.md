@@ -82,7 +82,7 @@ curl -X POST "http://localhost:8000/agents" \
 }'
 ```
 
-### 2. 에이전트와 대화하기
+### 2. vLLM 서버에서 LLM response 호출하기
 
 `POST /agents/{agent_name}/invoke` 엔드포인트를 사용하여 등록된 에이전트를 호출하고 작업을 수행합니다.
 
@@ -182,6 +182,68 @@ if __name__ == "__main__":
     if register_safety_agent():
         question = "세정 공정에서 황산 누출 시 가장 먼저 해야 할 일은 무엇인가요?"
         invoke_safety_agent(question)
+```
+
+## 각 모듈 별 에이전트 클래스 선언
+
+각각의 에이전트는 다른 함수들로 구성이 될 것으로 예상됩니다. 
+코드 관리 및 안정성을 위해 기본적인 에이전트 클래스를 선언하였습니다. 
+해당 클래스를 아래와 같이 상속받아 각 에이전트를 구현해주세요. 
+
+혹시 추가적으로 더 필요하다고 생각하시는 기본 함수(abstract method)가 있다면 간단하게라도 말씀해주세요.
+
+### `BaseAgent` 구조
+
+`BaseAgent`는 모든 에이전트가 가져야 할 기본 구조를 정의합니다.
+- **`__init__(self, name, description)`**: 에이전트의 이름과 설명을 초기화합니다.
+- **`invoke(self, user_input, context)`**: 에이전트의 핵심 로직을 구현해야 하는 추상 메서드입니다.
+
+### 예시: 오케스트레이션 에이전트
+
+다음은 사용자의 요청을 분석하여 가장 적절한 하위 에이전트에게 작업을 위임하는 `OrchestrationAgent`의 예시입니다. 이 코드는 `prism-core/core/agents/orchestrator.py`에서 확인할 수 있습니다.
+
+```python
+from typing import Any, Dict
+from .base import BaseAgent
+
+class OrchestrationAgent(BaseAgent):
+    """
+    다른 에이전트와 도구 사이의 작업을 조율하는 에이전트입니다.
+    사용자 요청을 받아 가장 적절한 에이전트나 도구를 결정하고 작업을 위임합니다.
+    """
+    def __init__(self, available_agents: Dict[str, BaseAgent]):
+        super().__init__(
+            name="orchestration_agent",
+            description="마스터 에이전트로, 작업을 적절한 하위 에이전트에게 라우팅합니다."
+        )
+        self.available_agents = available_agents
+
+    def invoke(self, user_input: str, context: Dict[str, Any] = None) -> str:
+        """사용자 입력을 기반으로 작업을 조율합니다."""
+        print(f"오케스트레이터가 입력을 받음: '{user_input}'")
+
+        # 1. 어떤 에이전트를 사용할지 결정
+        agent_names = list(self.available_agents.keys())
+        prompt = (
+            f"사용자 요청: '{user_input}'\n"
+            f"이 작업을 처리하기에 가장 적합한 에이전트는 다음 중 무엇입니까? "
+            f"에이전트의 이름만으로 응답해주세요. "
+            f"사용 가능한 에이전트: {agent_names}"
+        )
+        
+        # 내부 _call_llm 메서드를 사용하여 결정을 내림
+        chosen_agent_name = self._call_llm(prompt)
+        # ... (실제 구현에서는 LLM이 에이전트 이름을 반환) ...
+        
+        print(f"오케스트레이터가 선택한 에이전트: '{chosen_agent_name}'")
+
+        # 2. 선택된 에이전트에게 작업 위임
+        if chosen_agent_name and chosen_agent_name in self.available_agents:
+            chosen_agent = self.available_agents[chosen_agent_name]
+            return chosen_agent.invoke(user_input, context)
+        
+        return "죄송합니다, 요청을 처리할 적절한 에이전트를 찾지 못했습니다."
+
 ```
 
 ## API 엔드포인트 요약
