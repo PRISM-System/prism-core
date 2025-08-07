@@ -18,4 +18,4 @@ services:
             - driver: nvidia
               count: all
               capabilities: [gpu]
-    command: ./run.sh 
+    command: ./run.sh

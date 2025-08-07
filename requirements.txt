@@ -1,0 +1,8 @@
+pydantic>=2.11.7
+vllm>=0.10.0
+fastapi
+uvicorn[standard]
+pydantic-settings
+click>=8.2.1
+python-dotenv
+huggingface_hub 

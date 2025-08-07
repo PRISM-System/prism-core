@@ -1,32 +1,34 @@
 # Use an official Python runtime as a parent image
 FROM python:3.11-slim
 
+# Install C compiler and other build tools
+RUN apt-get update && apt-get install -y build-essential
+
 # Set the working directory in the container
 WORKDIR /app
 
-# Install uv
-RUN pip install uv
+# Copy the requirements file into the container
+COPY requirements.txt .
 
-# Copy the project files into the container
+# Install any needed dependencies specified in requirements.txt
+RUN pip install --no-cache-dir -r requirements.txt
+
+# Copy the rest of the application's code
 COPY . .
-
-# Install dependencies using uv
-RUN uv pip sync pyproject.toml
-
-# Set environment variables for non-interactive installations
-ENV DEBIAN_FRONTEND=noninteractive
 
 # Environment variable for the Hugging Face token
 # This will be passed in from the docker-compose.yml file
 ARG HUGGING_FACE_TOKEN
 ENV HUGGING_FACE_TOKEN=$HUGGING_FACE_TOKEN
 
-# Run the authentication script
-RUN --mount=type=cache,target=/root/.cache/huggingface \
-    python authenticate_hf.py
+# Run the authentication script during the build
+RUN python authenticate_hf.py
 
 # Make the run script executable
 RUN chmod +x ./run.sh
 
-# The command to run the application
+# Make port 8000 available to the world outside this container
+EXPOSE 8000
+
+# Run run.sh when the container launches
 CMD ["./run.sh"] 
