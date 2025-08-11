@@ -142,8 +142,11 @@ docker-compose logs -f db
 ```
 
 ### 서비스 구성
-- **llm_agent**: LLM 및 Agent API 서버 (포트: 8000)
+- **llm_agent**: 통합 API 서버 (포트: 8000)
+  - LLM & Agent API: `/api/agents/*`, `/api/generate`
+  - Database API: `/api/db/*`
 - **db**: PostgreSQL 데이터베이스 (포트: 5432)
+  - 직접 접근: `psql -h localhost -p 5432 -U myuser -d mydatabase`
 
 ## 🔧 API 사용법
 
@@ -273,11 +276,17 @@ docker-compose logs -f llm_agent
 
 **서비스 헬스 체크**:
 ```bash
-# 서버 응답 확인
+# API 서버 응답 확인 (포트: 8000)
 curl -X GET "http://localhost:8000/" | jq
 
-# DB 연결 상태 확인
+# Database API 테스트 (포트: 8000)
+curl -X GET "http://localhost:8000/api/db/" | jq
+
+# PostgreSQL DB 직접 연결 확인 (포트: 5432)
 docker-compose exec db pg_isready -U myuser -d mydatabase
+
+# 또는 직접 DB 접근
+psql -h localhost -p 5432 -U myuser -d mydatabase
 ```
 
 ## 🛠️ 개발
