@@ -1,7 +1,7 @@
 from fastapi import APIRouter, Depends, HTTPException
 from typing import List
 
-from .llm.base import BaseLLMService
+from .base import BaseLLMService
 from .agent_registry import AgentRegistry
 from .schemas import (
     GenerationRequest, 
@@ -11,7 +11,7 @@ from .schemas import (
     LLMGenerationRequest
 )
 
-def create_api_router(agent_registry: AgentRegistry, llm_service: BaseLLMService) -> APIRouter:
+def create_llm_router(agent_registry: AgentRegistry, llm_service: BaseLLMService) -> APIRouter:
     router = APIRouter()
 
     def get_agent_registry():
