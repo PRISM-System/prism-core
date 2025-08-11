@@ -6,6 +6,8 @@ services:
         - HUGGING_FACE_TOKEN=${HUGGING_FACE_TOKEN}
     env_file:
       - .env
+    environment:
+      - DATABASE_URL=postgresql://myuser:mysecretpassword@db:5432/mydatabase
     ports:
       - "8000:8000"
     volumes:
@@ -19,3 +21,20 @@ services:
               count: all
               capabilities: [gpu]
     command: ./run.sh
+    depends_on:
+      - db
+
+  db:
+    image: postgres:15-alpine
+    restart: always
+    environment:
+      - POSTGRES_USER=myuser
+      - POSTGRES_PASSWORD=mysecretpassword
+      - POSTGRES_DB=mydatabase
+    volumes:
+      - postgres_data:/var/lib/postgresql/data
+    ports:
+      - "5432:5432"
+
+volumes:
+  postgres_data:
