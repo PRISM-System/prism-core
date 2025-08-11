@@ -71,6 +71,35 @@ uv sync
 ./run.sh
 ```
 
+## ⚡ 빠른 시작
+
+### 1. Docker Compose로 전체 시스템 실행
+```bash
+# 환경 변수 설정 (선택사항)
+export HUGGING_FACE_TOKEN=your_token_here
+
+# 서비스 시작
+docker-compose up -d
+
+# 상태 확인
+docker-compose ps
+```
+
+### 2. API 테스트
+```bash
+# 서버 상태 확인
+curl http://localhost:8000/
+
+# 데이터베이스 테이블 목록 조회
+curl http://localhost:8000/api/db/tables
+
+# Agent 목록 조회
+curl http://localhost:8000/api/agents
+
+# Swagger UI에서 전체 API 확인
+open http://localhost:8000/docs
+```
+
 ## 📊 산업 DB 스키마
 
 이 프로젝트는 반도체 제조 공정의 이상 탐지를 위한 다음과 같은 핵심 테이블들을 포함합니다:
@@ -94,22 +123,50 @@ python test_db.py
 docker-compose exec db psql -U myuser -d mydatabase -c "SELECT COUNT(*) FROM semi_lot_manage;"
 ```
 
+## 🚀 서버 실행
+
+### Docker Compose 실행
+```bash
+# 환경 변수 설정 (필요한 경우)
+export HUGGING_FACE_TOKEN=your_token_here
+
+# 서비스 시작
+docker-compose up -d
+
+# 실행 상태 확인
+docker-compose ps
+
+# 로그 확인
+docker-compose logs -f llm_agent
+docker-compose logs -f db
+```
+
+### 서비스 구성
+- **llm_agent**: LLM 및 Agent API 서버 (포트: 8000)
+- **db**: PostgreSQL 데이터베이스 (포트: 5432)
+
 ## 🔧 API 사용법
 
-서버가 실행되면 다음 엔드포인트들을 사용할 수 있습니다:
+서버가 실행되면 완전히 분리된 두 개의 API 모듈을 사용할 수 있습니다:
 
-### 기본 엔드포인트
+### 📋 API 엔드포인트 목록
+
+#### 🤖 LLM & Agent API
 - `GET /`: 서비스 상태 확인
 - `GET /docs`: Swagger UI 문서
-
-### 에이전트 관리
 - `POST /api/agents`: 새 에이전트 등록
 - `GET /api/agents`: 등록된 에이전트 목록 조회
 - `DELETE /api/agents/{agent_name}`: 특정 에이전트 삭제
 - `POST /api/agents/{agent_name}/invoke`: 특정 에이전트 실행
-
-### LLM 생성
 - `POST /api/generate`: 직접 텍스트 생성
+
+#### 🗄️ Database API
+- `GET /api/db/`: 데이터베이스 정보 및 통계
+- `GET /api/db/tables`: 모든 테이블 목록 조회
+- `GET /api/db/tables/{table_name}/schema`: 특정 테이블 스키마 조회
+- `GET /api/db/tables/{table_name}/data`: 특정 테이블 데이터 조회 (페이징 지원)
+- `POST /api/db/query`: 커스텀 SQL 쿼리 실행 (SELECT만 허용)
+- `POST /api/db/tables/{table_name}/query`: 고급 테이블 쿼리 (필터링 지원)
 
 ### 예시 요청
 
@@ -161,6 +218,44 @@ curl -X POST "http://localhost:8000/api/agents/manufacturing_analyst/invoke" \
   }'
 ```
 
+**데이터베이스 API**:
+```bash
+# 데이터베이스 정보 확인
+curl -X GET "http://localhost:8000/api/db/"
+
+# 모든 테이블 목록 조회
+curl -X GET "http://localhost:8000/api/db/tables"
+
+# 특정 테이블 스키마 조회
+curl -X GET "http://localhost:8000/api/db/tables/semi_lot_manage/schema"
+
+# 테이블 데이터 조회 (기본 10개 행)
+curl -X GET "http://localhost:8000/api/db/tables/semi_lot_manage/data"
+
+# 페이징을 통한 테이블 데이터 조회
+curl -X GET "http://localhost:8000/api/db/tables/semi_lot_manage/data?limit=5&offset=10"
+
+# WHERE 조건을 포함한 테이블 데이터 조회
+curl -X GET "http://localhost:8000/api/db/tables/semi_lot_manage/data?where_clause=lot_id='LOT001'&limit=20"
+
+# 커스텀 SQL 쿼리 실행
+curl -X POST "http://localhost:8000/api/db/query" \
+  -H "Content-Type: application/json" \
+  -d '{
+    "query": "SELECT COUNT(*) as total_lots FROM semi_lot_manage WHERE create_date >= NOW() - INTERVAL '\''1 day'\''"
+  }'
+
+# 고급 테이블 쿼리 (JSON 바디 사용)
+curl -X POST "http://localhost:8000/api/db/tables/semi_lot_manage/query" \
+  -H "Content-Type: application/json" \
+  -d '{
+    "table_name": "semi_lot_manage",
+    "limit": 5,
+    "where_clause": "lot_status = '\''ACTIVE'\''",
+    "order_by": "create_date DESC"
+  }'
+```
+
 ## 🔍 시스템 상태 확인
 
 **Docker 컨테이너 상태**:
@@ -187,19 +282,48 @@ docker-compose exec db pg_isready -U myuser -d mydatabase
 
 ## 🛠️ 개발
 
-### 프로젝트 구조 설명
+### 📁 프로젝트 구조
 
-- **`core/agents/`**: BaseAgent 클래스와 에이전트 구현체들
-- **`core/llm/`**: LLM 서비스 추상화 레이어 (vLLM 구현체 포함)
-- **`core/data/`**: 데이터베이스 연결 및 ORM
-- **`core/api.py`**: FastAPI 라우터 정의
-- **`scripts/`**: DB 초기화 및 검증 스크립트
+```
+core/
+├── llm/                    # 🤖 LLM & Agent 모듈
+│   ├── api.py             # LLM/Agent API 라우터
+│   ├── agent_registry.py  # Agent 레지스트리 관리
+│   ├── schemas.py         # LLM/Agent 관련 스키마
+│   ├── base.py            # LLM 서비스 베이스 클래스
+│   ├── vllm_service.py    # vLLM 구현체
+│   └── __init__.py        # 모듈 export
+├── data/                   # 🗄️ Database 모듈
+│   ├── api.py             # Database API 라우터
+│   ├── service.py         # DB 서비스 클래스
+│   ├── schemas.py         # DB 관련 스키마
+│   ├── base.py            # DB 서비스 베이스 클래스
+│   ├── postgresql.py      # PostgreSQL 구현체
+│   └── __init__.py        # 모듈 export
+├── agents/                 # 🎯 Agent 구현체들
+└── config.py              # ⚙️ 전역 설정
+```
 
-### 새 에이전트 추가
+### ✨ 모듈 분리 특징
+- **완전 분리**: LLM과 DB가 독립적인 API와 서비스를 가짐
+- **명확한 책임**: 각 모듈이 고유한 역할과 엔드포인트를 담당
+- **확장성**: 새로운 LLM 서비스나 DB 타입을 쉽게 추가 가능
 
+### 🔧 개발 가이드
+
+#### 새 에이전트 추가
 1. `core/agents/` 디렉토리에 새 에이전트 클래스 생성
 2. `BaseAgent`를 상속하여 구현
-3. `AgentRegistry`에 등록
+3. API를 통해 `AgentRegistry`에 등록
+
+#### 새 DB 타입 추가
+1. `core/data/` 디렉토리에 새 DB 구현체 생성
+2. `BaseDataStore`를 상속하여 구현
+3. `DatabaseService`에서 사용
+
+#### API 확장
+- **LLM API**: `core/llm/api.py`에서 라우터 확장
+- **DB API**: `core/data/api.py`에서 라우터 확장
 
 ### 환경 변수
 

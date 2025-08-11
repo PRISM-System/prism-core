@@ -1,7 +1,8 @@
 from fastapi import FastAPI
-from core.api import create_api_router
-from core.agent_registry import AgentRegistry
-from core.llm.vllm_service import VLLMService
+from core.llm import AgentRegistry, VLLMService, create_llm_router
+from core.data.service import DatabaseService
+from core.data.api import create_db_router
+import os
 
 # FastAPI 앱 생성
 app = FastAPI(
@@ -14,9 +15,18 @@ app = FastAPI(
 agent_registry = AgentRegistry()
 llm_service = VLLMService()
 
-# API 라우터 생성 및 포함
-api_router = create_api_router(agent_registry, llm_service)
-app.include_router(api_router, prefix="/api")
+# 데이터베이스 연결 (분리된 서비스)
+db_url = os.getenv("DATABASE_URL", "postgresql://myuser:mysecretpassword@localhost:5432/mydatabase")
+db_service = DatabaseService(db_url)
+
+# API 라우터들 생성 및 포함
+# LLM/Agent API
+llm_router = create_llm_router(agent_registry, llm_service)
+app.include_router(llm_router, prefix="/api")
+
+# Database API (완전히 분리됨)
+db_router = create_db_router(db_service)
+app.include_router(db_router, prefix="/api")
 
 @app.get("/")
 def read_root():
