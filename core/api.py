@@ -32,6 +32,18 @@ def create_api_router(agent_registry: AgentRegistry, llm_service: BaseLLMService
     async def get_agents():
         return agent_registry.list_agents()
 
+    @router.delete("/agents/{agent_name}")
+    async def delete_agent(
+        agent_name: str,
+        registry: AgentRegistry = Depends(get_agent_registry)
+    ):
+        """
+        Delete an agent by name.
+        """
+        if not registry.delete_agent(agent_name):
+            raise HTTPException(status_code=404, detail="Agent not found")
+        return {"message": f"Agent '{agent_name}' has been deleted successfully"}
+
     @router.post("/agents/{agent_name}/invoke", response_model=AgentResponse)
     async def invoke_agent(
         agent_name: str, 

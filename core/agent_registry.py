@@ -14,4 +14,19 @@ class AgentRegistry:
         return self._agents.get(agent_name)
 
     def list_agents(self) -> List[Agent]:
-        return list(self._agents.values()) 
+        return list(self._agents.values())
+
+    def delete_agent(self, agent_name: str) -> bool:
+        """
+        Delete an agent by name.
+        
+        Args:
+            agent_name: Name of the agent to delete
+            
+        Returns:
+            True if agent was deleted, False if agent was not found
+        """
+        if agent_name in self._agents:
+            del self._agents[agent_name]
+            return True
+        return False 

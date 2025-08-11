@@ -105,6 +105,7 @@ docker-compose exec db psql -U myuser -d mydatabase -c "SELECT COUNT(*) FROM sem
 ### 에이전트 관리
 - `POST /api/agents`: 새 에이전트 등록
 - `GET /api/agents`: 등록된 에이전트 목록 조회
+- `DELETE /api/agents/{agent_name}`: 특정 에이전트 삭제
 - `POST /api/agents/{agent_name}/invoke`: 특정 에이전트 실행
 
 ### LLM 생성
@@ -134,6 +135,9 @@ curl -X POST "http://localhost:8000/api/agents" \
     "description": "제조 공정 데이터 분석 전문가",
     "role_prompt": "당신은 반도체 제조 공정의 이상 탐지 전문가입니다. 사용자의 질문에 대해 전문적이고 명확한 답변을 제공해주세요."
   }'
+
+# 특정 에이전트 삭제
+curl -X DELETE "http://localhost:8000/api/agents/manufacturing_analyst"
 ```
 
 **LLM 텍스트 생성**:
