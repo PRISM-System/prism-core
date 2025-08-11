@@ -1,5 +1,5 @@
 import abc
-from ..schemas import LLMGenerationRequest
+from .schemas import LLMGenerationRequest
 
 class BaseLLMService(abc.ABC):
     """

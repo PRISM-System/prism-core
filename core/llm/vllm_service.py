@@ -1,6 +1,6 @@
 from vllm import LLM, SamplingParams
 from ..config import settings
-from ..schemas import LLMGenerationRequest
+from .schemas import LLMGenerationRequest
 from .base import BaseLLMService
 
 class VLLMService(BaseLLMService):
