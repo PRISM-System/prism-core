@@ -9,4 +9,8 @@ class Settings(BaseSettings):
     gpu_memory_utilization: float = 0.90
     model_cache_dir: str = "/CACHE/MODELS"
 
+    # vLLM OpenAI-compatible server
+    vllm_openai_base_url: str = "http://localhost:8001/v1"
+    openai_api_key: str = "EMPTY"
+
 settings = Settings() 
