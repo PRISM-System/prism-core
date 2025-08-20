@@ -7,5 +7,11 @@ click>=8.2.1
 python-dotenv
 huggingface_hub
 psycopg2-binary
-httpx>=0.27.0
-openai>=1.50.0 
+requests
+# Vector DB dependencies
+weaviate-client>=4.0.0
+torch>=2.0.0
+transformers>=4.30.0
+numpy>=1.24.0
+sentence-transformers
+openai  # Optional: for OpenAI embeddings
