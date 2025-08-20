@@ -10,8 +10,13 @@ from .schemas import (
     LLMGenerationRequest,
     Agent,
     AgentResponse,
-    AgentResponseCollection
+    AgentResponseCollection,
+    RegisterToolRequest,
+    ToolDefinition,
+    ToolListResponse,
 )
+from .tools import ToolRegistry
+from .openai_compat_service import OpenAICompatService
 
 __all__ = [
     "BaseLLMService",
@@ -23,5 +28,10 @@ __all__ = [
     "LLMGenerationRequest",
     "Agent",
     "AgentResponse",
-    "AgentResponseCollection"
+    "AgentResponseCollection",
+    "RegisterToolRequest",
+    "ToolDefinition",
+    "ToolListResponse",
+    "ToolRegistry",
+    "OpenAICompatService",
 ] 
