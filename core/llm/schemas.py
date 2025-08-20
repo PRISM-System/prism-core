@@ -6,6 +6,9 @@ class GenerationRequest(BaseModel):
     max_tokens: int = 1024
     temperature: float = 0.7
     stop: Optional[List[str]] = None
+    client_id: Optional[str] = Field(None, description="Client identifier; required when use_tools=True")
+    use_tools: bool = Field(False, description="Whether to enable tool calling for this generation")
+    max_tool_calls: int = Field(3, description="Max number of tool calls allowed in a single generation")
 
 class GenerationResponse(BaseModel):
     text: str

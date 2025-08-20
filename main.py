@@ -1,5 +1,6 @@
 from fastapi import FastAPI
 from core.llm import AgentRegistry, VLLMService, create_llm_router
+from core.llm import ToolRegistry, OpenAICompatService
 from core.data.service import DatabaseService
 from core.data.api import create_db_router
 from core.tools import ToolRegistry, DatabaseTool
