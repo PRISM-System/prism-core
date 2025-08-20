@@ -259,6 +259,79 @@ curl -X POST "http://localhost:8000/api/db/tables/semi_lot_manage/query" \
   }'
 ```
 
+## 🧩 Tool Calling (vLLM 연동)
+
+- **개요**
+  - **vLLM OpenAI-Compatible Tool Calling(권장)**: 모델이 `tool_calls`를 생성하면 서버가 해당 툴을 실행하고 결과를 `role=tool` 메시지로 추가한 뒤 다시 모델을 호출해 최종 답변을 받습니다.
+  - **폴백 오케스트레이션**: OpenAI 호환 서버 미사용 시 `<tool_call>{...}</tool_call>` 태그 기반 내부 오케스트레이션을 사용합니다.
+
+- **사전 준비**
+  - `core/config.py`에서 다음 값을 확인/수정하세요:
+    - `vllm_openai_base_url` (예: `http://localhost:8001/v1`)
+    - `openai_api_key` (기본 `EMPTY`, vLLM 설정에 따라 무시될 수 있음)
+  - vLLM 서버는 모델에 맞는 파서/템플릿 플래그로 실행해야 합니다. 모델별 권장 플래그와 상세 사용법은 vLLM 문서를 참고하세요: [vLLM Tool Calling](https://docs.vllm.ai/en/stable/features/tool_calling.html#minimax-models-minimax_m1)
+
+- **클라이언트별 툴 등록 API**
+  - `POST /api/clients/{client_id}/tools`
+  - 요청 본문 예시:
+```json
+{
+  "name": "search_docs",
+  "description": "Search internal docs",
+  "input_schema": {
+    "type": "object",
+    "properties": { "q": { "type": "string" } },
+    "required": ["q"]
+  },
+  "endpoint": {
+    "url": "https://example.com/search",
+    "method": "GET",
+    "headers": { "X-API-KEY": "secret" },
+    "timeout_s": 8.0
+  }
+}
+```
+
+- **툴 관리 API**
+  - `GET /api/clients/{client_id}/tools`: 등록된 툴 목록
+  - `DELETE /api/clients/{client_id}/tools/{tool_name}`: 툴 삭제
+
+- **툴 사용하기: 일반 생성**
+```bash
+curl -X POST "http://localhost:8000/api/generate" \
+  -H "Content-Type: application/json" \
+  -d '{
+    "prompt": "사내 문서에서 RAG 구성 가이드를 찾아 요약해줘",
+    "use_tools": true,
+    "client_id": "CLIENT_A",
+    "max_tool_calls": 2,
+    "temperature": 0.3,
+    "max_tokens": 300
+  }'
+```
+
+- **툴 사용하기: 에이전트 호출**
+```bash
+curl -X POST "http://localhost:8000/api/agents/ops_agent/invoke" \
+  -H "Content-Type: application/json" \
+  -d '{
+    "prompt": "오늘 장애 알림 요약해줘",
+    "use_tools": true,
+    "client_id": "CLIENT_A",
+    "max_tool_calls": 3
+  }'
+```
+
+- **필드 설명**
+  - **use_tools**: true 시 tool calling 경로 활성화
+  - **client_id**: 클라이언트별 툴 네임스페이스 식별자 (필수)
+  - **max_tool_calls**: 한 요청 내 최대 툴 호출 횟수 제한
+
+- **주의 사항**
+  - `input_schema`는 JSON Schema 형식이며, 모델이 생성한 인자와 실제 툴 엔드포인트의 기대 스키마가 일치해야 합니다.
+  - 툴 엔드포인트는 GET/POST를 지원하며 `headers`, `timeout_s` 지정 가능.
+  - vLLM 서버는 모델에 맞는 `--tool-call-parser` 및 `--chat-template`로 실행해야 올바른 `tool_calls`가 생성됩니다.
+
 ## 🔍 시스템 상태 확인
 
 **Docker 컨테이너 상태**:
