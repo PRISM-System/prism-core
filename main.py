@@ -1,5 +1,6 @@
 from fastapi import FastAPI
 from core.llm import AgentRegistry, VLLMService, create_llm_router
+from core.llm import ToolRegistry, OpenAICompatService
 from core.data.service import DatabaseService
 from core.data.api import create_db_router
 import os
@@ -14,6 +15,8 @@ app = FastAPI(
 # 서비스 인스턴스 생성
 agent_registry = AgentRegistry()
 llm_service = VLLMService()
+tool_registry = ToolRegistry()
+openai_service = OpenAICompatService()
 
 # 데이터베이스 연결 (분리된 서비스)
 db_url = os.getenv("DATABASE_URL", "postgresql://myuser:mysecretpassword@localhost:5432/mydatabase")
@@ -21,7 +24,7 @@ db_service = DatabaseService(db_url)
 
 # API 라우터들 생성 및 포함
 # LLM/Agent API
-llm_router = create_llm_router(agent_registry, llm_service)
+llm_router = create_llm_router(agent_registry, llm_service, tool_registry, openai_service)
 app.include_router(llm_router, prefix="/api")
 
 # Database API (완전히 분리됨)
