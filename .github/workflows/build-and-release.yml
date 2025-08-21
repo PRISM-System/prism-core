@@ -17,7 +17,7 @@ jobs:
     - uses: actions/checkout@v4
     
     - name: Set up Python ${{ matrix.python-version }}
-      uses: actions/setup-python@v4
+      uses: actions/setup-python@v5
       with:
         python-version: ${{ matrix.python-version }}
     
@@ -30,10 +30,10 @@ jobs:
       run: python -m build
     
     - name: Upload build artifacts
-      uses: actions/upload-artifact@v3
+      uses: actions/upload-artifact@v4
       with:
         name: dist-${{ matrix.python-version }}
-        path: dist/
+        path: dist/*
 
   release:
     needs: build
@@ -42,37 +42,20 @@ jobs:
     
     steps:
     - name: Download all build artifacts
-      uses: actions/download-artifact@v3
+      uses: actions/download-artifact@v4
       with:
+        pattern: dist-*
+        merge-multiple: true
         path: dist/
-    
-    - name: Create Release
-      id: create_release
-      uses: actions/create-release@v1
-      env:
-        GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+
+    - name: Create GitHub Release and upload assets
+      uses: softprops/action-gh-release@v2
       with:
-        tag_name: ${{ github.ref }}
-        release_name: Release ${{ github.ref }}
+        tag_name: ${{ github.ref_name }}
+        name: Release ${{ github.ref_name }}
         draft: false
         prerelease: false
-    
-    - name: Upload wheel to Release
-      uses: actions/upload-release-asset@v1
+        files: |
+          dist/*
       env:
-        GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
-      with:
-        upload_url: ${{ steps.create_release.outputs.upload_url }}
-        asset_path: ./dist/*.whl
-        asset_name: prism-core-${{ github.ref_name }}-py3-none-any.whl
-        asset_content_type: application/zip
-    
-    - name: Upload source distribution to Release
-      uses: actions/upload-release-asset@v1
-      env:
-        GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
-      with:
-        upload_url: ${{ steps.create_release.outputs.upload_url }}
-        asset_path: ./dist/*.tar.gz
-        asset_name: prism-core-${{ github.ref_name }}.tar.gz
-        asset_content_type: application/gzip 
+        GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }} 
