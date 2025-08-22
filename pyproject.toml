@@ -1,6 +1,6 @@
 [project]
 name = "prism-core"
-version = "0.1.0"
+version = "0.1.6"
 description = "PRISM Core - 산업용 데이터베이스와 LLM 기반 Multi-Agent 시스템을 활용한 지능형 제조 공정 분석 플랫폼 엔진"
 authors = [
     {name = "PRISM Team", email = "prism@example.com"}
@@ -42,9 +42,17 @@ dev = [
     "httpx>=0.24.0",
 ]
 
+[build-system]
+requires = ["setuptools>=61.0", "wheel"]
+build-backend = "setuptools.build_meta"
+
 [tool.setuptools]
-packages = ["core"]
 package-dir = {"" = "."}
+
+[tool.setuptools.packages.find]
+where = ["."]
+include = ["core*"]
+exclude = ["tests*"]
 
 [tool.black]
 line-length = 88
