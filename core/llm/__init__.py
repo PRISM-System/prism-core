@@ -11,9 +11,6 @@ from .schemas import (
     Agent,
     AgentResponse,
     AgentResponseCollection,
-    RegisterToolRequest,
-    ToolDefinition,
-    ToolListResponse,
 )
 from .tools import ToolRegistry
 from .openai_compat_service import OpenAICompatService
@@ -29,9 +26,6 @@ __all__ = [
     "Agent",
     "AgentResponse",
     "AgentResponseCollection",
-    "RegisterToolRequest",
-    "ToolDefinition",
-    "ToolListResponse",
     "ToolRegistry",
     "OpenAICompatService",
 ] 
