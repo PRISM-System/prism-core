@@ -289,6 +289,26 @@ class VectorDBAPI:
                 logger.error(f"Search failed: {e}")
                 raise HTTPException(status_code=500, detail=str(e))
         
+        @router.get("/documents/{class_name}")
+        async def get_documents(
+            class_name: str,
+            client_id: str = "default",
+            limit: int = 100,
+            offset: int = 0
+        ):
+            """클래스의 모든 문서 조회"""
+            try:
+                client = self.get_client(client_id)
+                if not client.is_connected():
+                    client.connect()
+                
+                documents = client.get_documents(class_name, limit, offset)
+                return documents
+                
+            except Exception as e:
+                logger.error(f"Failed to get documents: {e}")
+                raise HTTPException(status_code=500, detail=str(e))
+        
         @router.delete("/documents/{class_name}/{doc_id}", response_model=APIResponse)
         async def delete_document(
             class_name: str,

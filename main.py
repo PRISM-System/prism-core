@@ -1,10 +1,11 @@
 from fastapi import FastAPI
-from core.llm import AgentRegistry, VLLMService, create_llm_router
-from core.llm import ToolRegistry, OpenAICompatService
+from core.llm import AgentRegistry, create_llm_router
+from core.llm import ToolRegistry
 from core.data.service import DatabaseService
 from core.data.api import create_db_router
 from core.tools import ToolRegistry, DatabaseTool
 import os
+from core.vector_db.api import create_vector_db_router
 
 # FastAPI 앱 생성
 app = FastAPI(
@@ -26,7 +27,8 @@ tool_registry.register_tool(database_tool)
 
 # Agent 시스템 초기화 (Tool Registry와 연결)
 agent_registry = AgentRegistry(tool_registry)
-llm_service = VLLMService()
+from core.llm import PrismLLMService
+llm_service = PrismLLMService()
 
 # API 라우터들 생성 및 포함
 # LLM/Agent API (Tool Registry 포함)
@@ -36,6 +38,12 @@ app.include_router(llm_router, prefix="/api")
 # Database API (완전히 분리됨)
 db_router = create_db_router(db_service)
 app.include_router(db_router, prefix="/api")
+
+# Vector-DB API (Weaviate 프록시)
+weaviate_url = os.getenv("WEAVIATE_URL", "http://weaviate:8080")
+weaviate_api_key = os.getenv("WEAVIATE_API_KEY")
+vector_router = create_vector_db_router(weaviate_url, weaviate_api_key)
+app.include_router(vector_router, prefix="/api")
 
 @app.get("/")
 def read_root():

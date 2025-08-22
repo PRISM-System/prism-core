@@ -3,6 +3,7 @@ from typing import List, Dict, Any
 
 from .base import BaseLLMService
 from .agent_registry import AgentRegistry
+from .prism_llm_service import PrismLLMService
 from .schemas import (
     GenerationRequest, 
     GenerationResponse, 
@@ -27,6 +28,8 @@ def create_llm_router(agent_registry: AgentRegistry, llm_service: BaseLLMService
     if tool_registry is None:
         tool_registry = ToolRegistry()
 
+    # PrismLLMService는 내장된 완전한 기능을 제공
+
     def get_agent_registry():
         return agent_registry
 
@@ -35,12 +38,6 @@ def create_llm_router(agent_registry: AgentRegistry, llm_service: BaseLLMService
         
     def get_tool_registry():
         return tool_registry
-
-    def get_tool_registry():
-        return tool_registry
-
-    def get_openai_service():
-        return openai_service
 
     @router.post("/agents", response_model=Agent)
     async def register_agent(agent: Agent):
@@ -86,91 +83,30 @@ def create_llm_router(agent_registry: AgentRegistry, llm_service: BaseLLMService
         registry: AgentRegistry = Depends(get_agent_registry),
         llm: BaseLLMService = Depends(get_llm_service),
         tools_reg: ToolRegistry = Depends(get_tool_registry),
-        oa_service: OpenAICompatService | None = Depends(get_openai_service),
     ):
         """Invoke an agent with automatic tool usage."""
         agent = registry.get_agent(agent_name)
         if not agent:
             raise HTTPException(status_code=404, detail="Agent not found")
             
-        tools_used = []
-        tool_results = []
+        # PrismLLMService인 경우 내장된 invoke_agent 메서드 사용 (권장)
+        if isinstance(llm, PrismLLMService):
+            # 도구 레지스트리 설정
+            llm.tool_registry = tools_reg
+            return await llm.invoke_agent(agent, request)
         
-        # Check if we should use tools
-        if request.use_tools and registry.should_use_tools(request.prompt):
-            relevant_tools = registry.get_relevant_tools_for_query(agent_name, request.prompt)
-            
-            # Execute relevant tools
-            for tool in relevant_tools:
-                try:
-                    # For database tool, try to intelligently determine parameters
-                    if tool.name == "database_tool":
-                        tool_params = _extract_database_params(request.prompt)
-                    else:
-                        tool_params = {}
-                    
-                    tool_request = ToolRequest(
-                        tool_name=tool.name,
-                        parameters=tool_params
-                    )
-                    
-                    tool_response = await tool.execute(tool_request)
-                    if tool_response.success:
-                        tools_used.append(tool.name)
-                        tool_results.append({
-                            "tool_name": tool.name,
-                            "result": tool_response.result,
-                            "execution_time_ms": tool_response.execution_time_ms
-                        })
-                except Exception as e:
-                    # Don't fail the entire request if a tool fails
-                    print(f"Tool {tool.name} failed: {e}")
-                    continue
-        
-        # Generate final response with tool results
-        combined_prompt = agent.get_full_prompt(request.prompt, tool_results if tool_results else None)
-
-
-        if request.use_tools:
-            if not request.client_id:
-                raise HTTPException(status_code=400, detail="client_id is required when use_tools=True")
-            if oa_service is None:
-                # Fallback to naive orchestrator if OpenAI-compatible service not provided
-                tools = tools_reg.list_tools(request.client_id)
-                orchestrator = ToolOrchestrator(llm_service, tools_reg)
-                text = orchestrator.generate_with_tools(
-                    base_prompt=combined_prompt,
-                    client_id=request.client_id,
-                    tools=tools,
-                    max_tool_calls=request.max_tool_calls,
-                    max_tokens=request.max_tokens,
-                    temperature=request.temperature,
-                    stop=request.stop,
-                )
-                return AgentResponse(text=text)
-            # Use vLLM OpenAI-compatible tool calling
-            text = _run_tool_loop(
-                base_prompt=combined_prompt,
-                client_id=request.client_id,
-                max_tokens=request.max_tokens,
-                temperature=request.temperature,
-                stop=request.stop,
-                tools_reg=tools_reg,
-                oa_service=oa_service,
-            )
-            return AgentResponse(text=text)
-
+        # 다른 LLM 서비스를 위한 기본 구현 (폴백)
         llm_request = LLMGenerationRequest(
-            prompt=combined_prompt,
+            prompt=agent.get_full_prompt(request.prompt, []),
             max_tokens=request.max_tokens,
             temperature=request.temperature,
             stop=request.stop,
         )
-        generated_text = llm_service.generate(llm_request)
+        generated_text = llm.generate(llm_request)
         return AgentResponse(
             text=generated_text, 
-            tools_used=tools_used,
-            tool_results=tool_results
+            tools_used=[],
+            tool_results=[]
         )
 
     # Tool Management APIs
@@ -181,7 +117,7 @@ def create_llm_router(agent_registry: AgentRegistry, llm_service: BaseLLMService
         """List all registered tools."""
         return tool_registry.list_tools()
 
-    @router.post("/tools/register", response_model=dict)
+    @router.post("/tools", response_model=dict)
     async def register_tool(
         request: ToolRegistrationRequest,
         tool_registry: ToolRegistry = Depends(get_tool_registry)
@@ -302,8 +238,6 @@ def create_llm_router(agent_registry: AgentRegistry, llm_service: BaseLLMService
     async def generate(
         request: GenerationRequest,
         llm: BaseLLMService = Depends(get_llm_service),
-        tools_reg: ToolRegistry = Depends(get_tool_registry),
-        oa_service: OpenAICompatService | None = Depends(get_openai_service),
     ):
         """Generate text based on a prompt."""
         llm_request = LLMGenerationRequest(
@@ -312,7 +246,7 @@ def create_llm_router(agent_registry: AgentRegistry, llm_service: BaseLLMService
             temperature=request.temperature,
             stop=request.stop,
         )
-        generated_text = llm_service.generate(llm_request)
+        generated_text = llm.generate(llm_request)
         return GenerationResponse(text=generated_text)
     
     return router

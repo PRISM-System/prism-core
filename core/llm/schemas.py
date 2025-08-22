@@ -14,7 +14,9 @@ class GenerationResponse(BaseModel):
     text: str
 
 class LLMGenerationRequest(BaseModel):
-    prompt: str
+    prompt: Optional[str] = Field(default=None, description="Optional plain prompt; prefer chat messages")
+    messages: Optional[List[Dict[str, Any]]] = Field(default=None, description="OpenAI-style chat messages")
+    extra_body: Optional[Dict[str, Any]] = Field(default=None, description="Pass-through fields (e.g., messages, tool_choice)")
     max_tokens: int = 1024
     temperature: float = 0.7
     stop: Optional[List[str]] = None
@@ -45,6 +47,7 @@ class Agent(BaseModel):
 class AgentResponse(GenerationResponse):
     tools_used: List[str] = Field(default_factory=list, description="List of tools used in this response")
     tool_results: List[Dict[str, Any]] = Field(default_factory=list, description="Results from tool executions")
+    metadata: Optional[Dict[str, Any]] = Field(default_factory=dict, description="Additional metadata about the response")
 
 class AgentResponseCollection(BaseModel):
     responses: List[AgentResponse]
@@ -55,3 +58,6 @@ class AgentInvokeRequest(BaseModel):
     temperature: float = Field(default=0.7, description="Temperature for generation")
     stop: Optional[List[str]] = Field(default=None, description="Stop sequences")
     use_tools: bool = Field(default=True, description="Whether to automatically use tools if relevant") 
+    max_tool_calls: int = Field(default=3, description="Max number of tool call rounds for chat with tools")
+    extra_body: Optional[Dict[str, Any]] = Field(default=None, description="OpenAI-compatible extra options (e.g., repetition_penalty, chat_template_kwargs)")
+    user_id: Optional[str] = Field(default=None, description="User ID for memory search and personalization") 
