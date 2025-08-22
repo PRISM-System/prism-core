@@ -8,7 +8,8 @@ import uuid
 import time
 import logging
 from typing import List, Dict, Any, Optional, Union
-from datetime import datetime
+from datetime import datetime, timezone
+from urllib.parse import urlparse
 
 try:
     import weaviate
@@ -56,26 +57,71 @@ class WeaviateClient:
     def connect(self) -> bool:
         """Weaviate 서버에 연결"""
         try:
-            # 인증 설정
+            # 인증 설정 (v3: weaviate.AuthApiKey, v4: weaviate.auth.AuthApiKey)
             auth_config = None
             if self.api_key:
-                auth_config = weaviate.AuthApiKey(api_key=self.api_key)
+                try:
+                    auth_config = weaviate.AuthApiKey(api_key=self.api_key)
+                except Exception:
+                    try:
+                        from weaviate.auth import AuthApiKey
+                        auth_config = AuthApiKey(self.api_key)
+                    except Exception:
+                        auth_config = None
             
-            # 클라이언트 생성
-            self.client = weaviate.Client(
-                url=self.url,
-                auth_client_secret=auth_config,
-                timeout_config=(5, self.timeout)
-            )
+            # 클라이언트 생성 (버전별 시그니처 대응)
+            client_obj = None
+            # 1) v3 스타일 (keyword url)
+            try:
+                client_obj = weaviate.Client(
+                    url=self.url,
+                    auth_client_secret=auth_config,
+                    timeout_config=(5, self.timeout)
+                )
+            except TypeError:
+                # 2) v3 스타일 (positional url)
+                try:
+                    client_obj = weaviate.Client(
+                        self.url,
+                        auth_client_secret=auth_config,
+                        timeout_config=(5, self.timeout)
+                    )
+                except TypeError:
+                    # 3) v4 스타일: connect_to_local/custom
+                    parsed = urlparse(self.url)
+                    host = parsed.hostname or "localhost"
+                    port = parsed.port or 8080
+                    # Prefer connect_to_local if available
+                    try:
+                        # auth parameter name differs in v4
+                        try:
+                            client_obj = weaviate.connect_to_local(
+                                host=host,
+                                port=port,
+                            )
+                        except Exception:
+                            # As a fallback, try generic Client without args
+                            client_obj = weaviate.Client()
+                    except Exception as e3:
+                        raise e3
+            
+            self.client = client_obj
             
             # 연결 테스트
-            if self.client.is_ready():
+            if hasattr(self.client, "is_ready") and self.client.is_ready():
                 self._connected = True
                 logger.info(f"Connected to Weaviate at {self.url}")
                 return True
             else:
-                logger.error("Weaviate server is not ready")
-                return False
+                # 일부 버전은 ready 체크가 다를 수 있음: 메타 호출로 대체 확인
+                try:
+                    _ = self.client.get_meta()
+                    self._connected = True
+                    logger.info(f"Connected to Weaviate at {self.url} (meta ok)")
+                    return True
+                except Exception:
+                    logger.error("Weaviate server is not ready")
+                    return False
                 
         except Exception as e:
             logger.error(f"Failed to connect to Weaviate: {e}")
@@ -184,7 +230,10 @@ class WeaviateClient:
                 "content": document.content,
                 "title": document.title,
                 "source": document.source,
-                "created_at": document.created_at.isoformat() if document.created_at else datetime.now().isoformat()
+                "created_at": (
+                    (document.created_at.replace(tzinfo=timezone.utc).isoformat() if document.created_at.tzinfo is None else document.created_at.isoformat())
+                    if document.created_at else datetime.now(timezone.utc).isoformat()
+                )
             }
             
             # 메타데이터 추가
@@ -252,7 +301,9 @@ class WeaviateClient:
                             "content": document.content,
                             "title": document.title,
                             "source": document.source,
-                            "created_at": document.created_at.isoformat() if document.created_at else datetime.now().isoformat()
+                            "created_at": (
+                                (document.created_at.replace(tzinfo=timezone.utc).isoformat() if document.created_at and document.created_at.tzinfo is None else (document.created_at.isoformat() if document.created_at else datetime.now(timezone.utc).isoformat()))
+                            )
                         }
                         
                         # 메타데이터 추가
@@ -413,6 +464,50 @@ class WeaviateClient:
         
         logger.info(f"Deleted {sum(results)} out of {len(doc_ids)} documents from {class_name}")
         return results
+    
+    def get_documents(self, class_name: str, limit: int = 100, offset: int = 0) -> List[Dict[str, Any]]:
+        """
+        클래스의 모든 문서 조회
+        
+        Args:
+            class_name: 클래스명
+            limit: 조회할 문서 수 (기본값: 100)
+            offset: 시작 위치 (기본값: 0)
+            
+        Returns:
+            문서 리스트 (Weaviate 객체 형식)
+        """
+        if not self.is_connected():
+            raise ConnectionError("Not connected to Weaviate")
+        
+        try:
+            # Weaviate에서 모든 객체 조회
+            result = self.client.data_object.get(
+                class_name=class_name,
+                limit=limit,
+                offset=offset,
+                include=["id", "content", "title", "source", "created_at", "metadata", "_additional"]
+            )
+            
+            documents = []
+            if result and "objects" in result:
+                for obj in result["objects"]:
+                    # vectorWeights 정보 포함
+                    doc = {
+                        "id": obj.get("id"),
+                        "properties": obj.get("properties", {}),
+                        "vectorWeights": obj.get("_additional", {}).get("vectorWeights"),
+                        "creationTimeUnix": obj.get("_additional", {}).get("creationTimeUnix"),
+                        "lastUpdateTimeUnix": obj.get("_additional", {}).get("lastUpdateTimeUnix")
+                    }
+                    documents.append(doc)
+            
+            logger.debug(f"Retrieved {len(documents)} documents from {class_name}")
+            return documents
+            
+        except Exception as e:
+            logger.error(f"Failed to get documents from {class_name}: {e}")
+            return []
     
     def get_status(self) -> VectorDBStatus:
         """Vector DB 상태 정보 조회"""

@@ -2,6 +2,10 @@ from typing import Any, Dict, List, Optional
 from pydantic import BaseModel, Field
 import httpx
 
+# DEPRECATED: Legacy HTTP tool registry (client-scoped).
+# Current orchestration uses OpenAI-compatible chat tools via PrismLLMService.
+# This module remains for backward compatibility and standalone HTTP tools.
+
 
 class HttpEndpoint(BaseModel):
     url: str = Field(..., description="HTTP endpoint URL to invoke the tool")
@@ -15,6 +19,16 @@ class Tool(BaseModel):
     description: str = Field(..., description="What the tool does and when to use it")
     input_schema: Dict[str, Any] = Field(..., description="JSON Schema for the tool's input arguments")
     endpoint: HttpEndpoint = Field(..., description="How to invoke the tool")
+
+    def to_openai_tool(self) -> Dict[str, Any]:
+        return {
+            "type": "function",
+            "function": {
+                "name": self.name,
+                "description": self.description,
+                "parameters": self.input_schema,
+            },
+        }
 
 
 class ToolRegistry:
