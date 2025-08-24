@@ -1,16 +1,59 @@
-from pydantic_settings import BaseSettings
+import os
+from pydantic_settings import BaseSettings, SettingsConfigDict
+from pathlib import Path
+from typing import Optional
+
+# 프로젝트 루트 디렉토리
+project_root = Path(__file__).parent.parent
 
 class Settings(BaseSettings):
     """
-    Application settings.
+    PRISM Core 설정 클래스
+    환경 변수나 .env 파일에서 설정을 로드합니다.
     """
-    model_name: str = "meta-llama/Llama-3.2-1B"
-    tensor_parallel_size: int = 1
-    gpu_memory_utilization: float = 0.90
-    model_cache_dir: str = "/CACHE/MODELS"
+    
+    # Server Settings
+    HOST: str = "0.0.0.0"
+    PORT: int = 8000
+    
+    # Database Settings
+    DATABASE_URL: str = "postgresql://myuser:mysecretpassword@localhost:5432/mydatabase"
+    POSTGRES_USER: str = "myuser"
+    POSTGRES_PASSWORD: str = "mysecretpassword"
+    POSTGRES_DB: str = "mydatabase"
+    
+    # Weaviate Settings (기본 설정만 유지)
+    WEAVIATE_URL: str = "http://weaviate:8080"
+    WEAVIATE_API_KEY: Optional[str] = None
+    
+    # LLM Settings
+    VLLM_HOST: str = "0.0.0.0"
+    VLLM_PORT: int = 8001
+    VLLM_MODEL: str = "Qwen/Qwen3-14B"
+    VLLM_ARGS: str = "--enable-auto-tool-choice --tool-call-parser hermes"
+    VLLM_OPENAI_BASE_URL: str = "http://vllm:8001/v1"
+    DEFAULT_MODEL: str = "Qwen/Qwen3-14B"
+    
+    # OpenAI Settings
+    OPENAI_API_KEY: str = "EMPTY"
+    
+    # Hugging Face Settings
+    HUGGING_FACE_TOKEN: str = "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"
+    
+    # Vector encoder configuration (기본값만 제공)
+    VECTOR_ENCODER_MODEL: str = "sentence-transformers/all-MiniLM-L6-v2"
+    VECTOR_DIM: int = 384
+    
+    # PRISM-Core base URL (for internal tool communication)
+    PRISM_CORE_BASE_URL: str = "http://localhost:8000"
+    
+    # Pydantic-settings 설정
+    model_config = SettingsConfigDict(
+        env_file=project_root / ".env",
+        env_file_encoding='utf-8',
+        case_sensitive=False,
+        extra='ignore'
+    )
 
-    # vLLM OpenAI-compatible server
-    vllm_openai_base_url: str = "http://localhost:8001/v1"
-    openai_api_key: str = "EMPTY"
-
+# 전역 설정 객체
 settings = Settings() 

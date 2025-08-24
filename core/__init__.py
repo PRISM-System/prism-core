@@ -5,7 +5,7 @@ This package provides core components for building multi-agent systems
 with large language models and vector databases.
 """
 
-__version__ = "0.1.6"
+__version__ = "0.2.1"
 
 # LLM 모듈 import
 try:
@@ -45,6 +45,15 @@ except ImportError:
     # Tools 의존성이 없는 경우 무시
     pass
 
+# Agents 모듈 import
+try:
+    from .agents.base import BaseAgent
+    from .agents.agent_manager import AgentManager
+    from .agents.workflow_manager import WorkflowManager
+except ImportError:
+    # Agents 의존성이 없는 경우 무시
+    pass
+
 __all__ = [
     "__version__",
     # LLM
@@ -67,4 +76,8 @@ __all__ = [
     "ToolRegistry",
     "ToolRequest",
     "ToolResponse",
+    # Agents
+    "BaseAgent",
+    "AgentManager",
+    "WorkflowManager",
 ]
