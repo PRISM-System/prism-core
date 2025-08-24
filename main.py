@@ -20,26 +20,26 @@ db_service = DatabaseService(settings.DATABASE_URL)
 # Tool 시스템 초기화
 tool_registry = ToolRegistry()
 
-# Database Tool 등록 (lazy import)
-from prism_core.core.tools import get_database_tool
-DatabaseTool = get_database_tool()
-database_tool = DatabaseTool(db_service)
-tool_registry.register_tool(database_tool)
+# # Database Tool 등록 (lazy import)
+# from prism_core.core.tools import get_database_tool
+# DatabaseTool = get_database_tool()
+# database_tool = DatabaseTool(db_service)
+# tool_registry.register_tool(database_tool)
 
-# RAG Search Tool 등록 (lazy import)
-from prism_core.core.tools import create_rag_search_tool
-rag_search_tool = create_rag_search_tool(class_prefix="Core")
-tool_registry.register_tool(rag_search_tool)
+# # RAG Search Tool 등록 (lazy import)
+# from prism_core.core.tools import create_rag_search_tool
+# rag_search_tool = create_rag_search_tool(class_prefix="Core")
+# tool_registry.register_tool(rag_search_tool)
 
-# Compliance Tool 등록 (lazy import)
-from prism_core.core.tools import create_compliance_tool
-compliance_tool = create_compliance_tool(class_prefix="Core")
-tool_registry.register_tool(compliance_tool)
+# # Compliance Tool 등록 (lazy import)
+# from prism_core.core.tools import create_compliance_tool
+# compliance_tool = create_compliance_tool(class_prefix="Core")
+# tool_registry.register_tool(compliance_tool)
 
-# Memory Search Tool 등록 (lazy import)
-from prism_core.core.tools import create_memory_search_tool
-memory_search_tool = create_memory_search_tool(class_prefix="Core")
-tool_registry.register_tool(memory_search_tool)
+# # Memory Search Tool 등록 (lazy import)
+# from prism_core.core.tools import create_memory_search_tool
+# memory_search_tool = create_memory_search_tool(class_prefix="Core")
+# tool_registry.register_tool(memory_search_tool)
 
 # Agent 시스템 초기화 (Tool Registry와 연결)
 agent_registry = AgentRegistry(tool_registry)

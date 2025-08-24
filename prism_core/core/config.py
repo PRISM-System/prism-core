@@ -22,9 +22,6 @@ class Settings(BaseSettings):
     POSTGRES_PASSWORD: str = "mysecretpassword"
     POSTGRES_DB: str = "mydatabase"
     
-    # Weaviate Settings (에이전트별로 관리되므로 기본값만 제공)
-    # 각 에이전트가 자신만의 Weaviate 인스턴스를 관리합니다
-    
     # LLM Settings
     VLLM_HOST: str = "0.0.0.0"
     VLLM_PORT: int = 8001

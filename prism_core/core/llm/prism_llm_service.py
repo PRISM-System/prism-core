@@ -52,10 +52,10 @@ class PrismLLMService(BaseLLMService):
         self.session.timeout = 30
 
         # OpenAI-compatible vLLM 클라이언트 설정
-        base_url = (openai_base_url or settings.vllm_openai_base_url).rstrip('/')
+        base_url = (openai_base_url or settings.VLLM_OPENAI_BASE_URL).rstrip('/')
         if not base_url.endswith("/v1"):
             base_url = f"{base_url}/v1"
-        self.client = OpenAI(base_url=base_url, api_key=api_key or settings.openai_api_key)
+        self.client = OpenAI(base_url=base_url, api_key=api_key or settings.OPENAI_API_KEY)
         
         # 제조업 도메인 지식 기반 응답 템플릿 (폴백용)
         self.response_templates = {
