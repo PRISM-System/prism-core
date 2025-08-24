@@ -28,21 +28,155 @@ PRISM-Core provides essential AI services that enable intelligent manufacturing 
 ┌─────────────────┐    ┌─────────────────┐    ┌─────────────────┐
 │   PRISM-Core    │    │     Weaviate    │    │      vLLM       │
 │                 │    │   Vector DB     │    │   LLM Service   │
+│                 │    │                 │    │                 │
 │ ┌─────────────┐ │    │                 │    │                 │
-│ │FastAPI App  │◄┼────┼►│Document Store │ │    │ ┌─────────────┐ │
+│ │FastAPI App  │◄┼────┼►│Document Store │    │ ┌─────────────┐ │
 │ └─────────────┘ │    │ └─────────────┘ │    │ │Model Serving│ │
-│                 │    │                 │    │ └─────────────┘ │
-│ ┌─────────────┐ │    │ ┌─────────────┐ │    │                 │
-│ │Vector DB API│◄┼────┼►│Search Engine│ │    │ ┌─────────────┐ │
-│ └─────────────┘ │    │ └─────────────┘ │    │ │Text Gen     │ │
-└─────────────────┘    └─────────────────┘    └─────────────────┘
-         │                       │                       │
-         │                       │                       │
-         ▼                       ▼                       ▼
-┌─────────────────┐    ┌─────────────────┐    ┌─────────────────┐
-│   PostgreSQL    │    │   Redis Cache   │    │   Model Store   │
-│   (Metadata)    │    │   (Sessions)    │    │   (Weights)     │
-└─────────────────┘    └─────────────────┘    └─────────────────┘
+│ ┌─────────────┐ │    │                 │    │ └─────────────┘ │
+│ │Tool System  │ │    │ ┌─────────────┐ │    │                 │
+│ └─────────────┘ │    │ │Vector Index │ │    │ ┌─────────────┐ │
+│ ┌─────────────┐ │    │ └─────────────┘ │    │ │API Gateway  │ │
+│ │Agent System │ │    │                 │    │ └─────────────┘ │
+│ └─────────────┘ │    │ ┌─────────────┐ │    └─────────────────┘
+└─────────────────┘    │ │Search Engine│ │
+                       │ └─────────────┘ │
+                       └─────────────────┘
+```
+
+## 🔧 Agent Management System
+
+PRISM-Core provides comprehensive agent management capabilities:
+
+### Agent Manager
+
+The `AgentManager` handles agent lifecycle and management:
+
+```python
+from prism_core.core.agents import AgentManager, ToolRegistry
+
+# Initialize agent manager
+agent_manager = AgentManager()
+agent_manager.set_tool_registry(tool_registry)
+
+# Register agents
+agent = Agent(
+    name="research_agent",
+    description="Research and analysis agent",
+    tools=["rag_search", "compliance_check"]
+)
+agent_manager.register_agent(agent)
+
+# Assign tools to agents
+agent_manager.assign_tools_to_agent("research_agent", ["rag_search", "memory_search"])
+
+# Validate agent tools
+validation = agent_manager.validate_agent_tools("research_agent")
+print(validation)  # {"valid": True, "valid_tools": [...], "invalid_tools": []}
+```
+
+### Workflow Manager
+
+The `WorkflowManager` handles orchestration workflows:
+
+```python
+from prism_core.core.agents import WorkflowManager
+
+# Initialize workflow manager
+workflow_manager = WorkflowManager()
+workflow_manager.set_tool_registry(tool_registry)
+
+# Define workflow steps
+workflow_steps = [
+    {
+        "name": "search_documents",
+        "type": "tool_call",
+        "tool_name": "rag_search",
+        "parameters": {"query": "{{user_query}}"}
+    },
+    {
+        "name": "check_compliance",
+        "type": "tool_call", 
+        "tool_name": "compliance_check",
+        "parameters": {"content": "{{search_documents.output}}"}
+    }
+]
+
+# Define and execute workflow
+workflow_manager.define_workflow("research_workflow", workflow_steps)
+result = workflow_manager.execute_workflow("research_workflow", {"user_query": "AI safety"})
+```
+
+## 🔧 Agent-Specific Vector DB Setup
+
+PRISM-Core provides tools for building vector databases, but each agent should set up their own Weaviate instance:
+
+### 1. Agent Weaviate Setup
+
+```bash
+# Agent's docker-compose.yml
+version: '3.8'
+services:
+  weaviate:
+    image: semitechnologies/weaviate:1.21.3
+    ports:
+      - "18080:8080"
+    environment:
+      QUERY_DEFAULTS_LIMIT: 25
+      AUTHENTICATION_ANONYMOUS_ACCESS_ENABLED: 'true'
+      PERSISTENCE_DATA_PATH: '/var/lib/weaviate'
+      DEFAULT_VECTORIZER_MODULE: 'text2vec-transformers'
+      ENABLE_MODULES: 'text2vec-transformers'
+      CLUSTER_HOSTNAME: 'node1'
+    volumes:
+      - weaviate_data:/var/lib/weaviate
+```
+
+### 2. Agent Tool Configuration
+
+```python
+# Agent's tool setup
+from prism_core.core.tools import (
+    create_rag_search_tool,
+    create_compliance_tool,
+    create_memory_search_tool
+)
+
+# Agent-specific Weaviate configuration
+weaviate_url = "http://localhost:18080"
+encoder_model = "sentence-transformers/all-MiniLM-L6-v2"
+openai_base_url = "http://localhost:8001/v1"
+
+# Create tools with agent-specific settings
+rag_tool = create_rag_search_tool(
+    weaviate_url=weaviate_url,
+    encoder_model=encoder_model,
+    client_id="agent_orch",
+    class_prefix="Orch"  # Weaviate 클래스명: OrchResearch, OrchHistory, OrchCompliance
+)
+
+compliance_tool = create_compliance_tool(
+    weaviate_url=weaviate_url,
+    openai_base_url=openai_base_url,
+    client_id="agent_orch",
+    class_prefix="Orch"  # Weaviate 클래스명: OrchCompliance
+)
+
+memory_tool = create_memory_search_tool(
+    weaviate_url=weaviate_url,
+    openai_base_url=openai_base_url,
+    client_id="agent_orch",
+    class_prefix="Orch"  # Weaviate 클래스명: OrchHistory
+)
+```
+
+### 3. Tool Registration
+
+```python
+# Register tools with agent's tool registry
+tool_registry = ToolRegistry()
+tool_registry.register_tool(rag_tool)
+tool_registry.register_tool(compliance_tool)
+tool_registry.register_tool(memory_tool)
 ```
 
 ## 🛠️ System Requirements

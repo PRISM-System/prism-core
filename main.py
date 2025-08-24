@@ -3,8 +3,8 @@ from core.llm import AgentRegistry, create_llm_router
 from core.llm import ToolRegistry
 from core.data.service import DatabaseService
 from core.data.api import create_db_router
-from core.tools import ToolRegistry, DatabaseTool
-import os
+from core.tools import ToolRegistry, DatabaseTool, RAGSearchTool, ComplianceTool, MemorySearchTool
+from core.config import settings
 from core.vector_db.api import create_vector_db_router
 
 # FastAPI 앱 생성
@@ -15,8 +15,7 @@ app = FastAPI(
 )
 
 # 데이터베이스 연결
-db_url = os.getenv("DATABASE_URL", "postgresql://myuser:mysecretpassword@localhost:5432/mydatabase")
-db_service = DatabaseService(db_url)
+db_service = DatabaseService(settings.DATABASE_URL)
 
 # Tool 시스템 초기화
 tool_registry = ToolRegistry()
@@ -24,6 +23,18 @@ tool_registry = ToolRegistry()
 # Database Tool 등록
 database_tool = DatabaseTool(db_service)
 tool_registry.register_tool(database_tool)
+
+# RAG Search Tool 등록
+rag_search_tool = RAGSearchTool(class_prefix="Core")
+tool_registry.register_tool(rag_search_tool)
+
+# Compliance Tool 등록
+compliance_tool = ComplianceTool(class_prefix="Core")
+tool_registry.register_tool(compliance_tool)
+
+# Memory Search Tool 등록
+memory_search_tool = MemorySearchTool(class_prefix="Core")
+tool_registry.register_tool(memory_search_tool)
 
 # Agent 시스템 초기화 (Tool Registry와 연결)
 agent_registry = AgentRegistry(tool_registry)
@@ -40,9 +51,7 @@ db_router = create_db_router(db_service)
 app.include_router(db_router, prefix="/api")
 
 # Vector-DB API (Weaviate 프록시)
-weaviate_url = os.getenv("WEAVIATE_URL", "http://weaviate:8080")
-weaviate_api_key = os.getenv("WEAVIATE_API_KEY")
-vector_router = create_vector_db_router(weaviate_url, weaviate_api_key)
+vector_router = create_vector_db_router(settings.WEAVIATE_URL, settings.WEAVIATE_API_KEY)
 app.include_router(vector_router, prefix="/api")
 
 @app.get("/")
