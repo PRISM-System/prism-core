@@ -22,9 +22,8 @@ class Settings(BaseSettings):
     POSTGRES_PASSWORD: str = "mysecretpassword"
     POSTGRES_DB: str = "mydatabase"
     
-    # Weaviate Settings (기본 설정만 유지)
-    WEAVIATE_URL: str = "http://weaviate:8080"
-    WEAVIATE_API_KEY: Optional[str] = None
+    # Weaviate Settings (에이전트별로 관리되므로 기본값만 제공)
+    # 각 에이전트가 자신만의 Weaviate 인스턴스를 관리합니다
     
     # LLM Settings
     VLLM_HOST: str = "0.0.0.0"
@@ -40,9 +39,8 @@ class Settings(BaseSettings):
     # Hugging Face Settings
     HUGGING_FACE_TOKEN: str = "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"
     
-    # Vector encoder configuration (기본값만 제공)
-    VECTOR_ENCODER_MODEL: str = "sentence-transformers/all-MiniLM-L6-v2"
-    VECTOR_DIM: int = 384
+    # Vector encoder configuration (에이전트별로 관리되므로 기본값만 제공)
+    # 각 에이전트가 자신만의 벡터 인코더 설정을 관리합니다
     
     # PRISM-Core base URL (for internal tool communication)
     PRISM_CORE_BASE_URL: str = "http://localhost:8000"
