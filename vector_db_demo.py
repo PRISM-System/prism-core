@@ -11,7 +11,7 @@ import logging
 from datetime import datetime
 from typing import List
 
-from core.vector_db import (
+from prism_core.core.vector_db import (
     WeaviateClient, DocumentSchema, SearchQuery, IndexConfig,
     EncoderManager, VectorDBAPI
 )
@@ -166,7 +166,7 @@ async def demo_usage_patterns():
     print("1️⃣ 기본 사용 패턴:")
     print("""
 # 1. 클라이언트 초기화
-from core.vector_db import WeaviateClient, EncoderManager, IndexConfig
+from prism_core.core.vector_db import WeaviateClient, EncoderManager, IndexConfig
 
 client = WeaviateClient('http://localhost:8080')
 encoder = EncoderManager('intfloat/multilingual-e5-base')
@@ -195,7 +195,7 @@ results = client.search("Documents", query)
     print("\n2️⃣ API 사용 패턴:")
     print("""
 # FastAPI 앱에 Vector DB API 추가
-from core.vector_db import create_vector_db_router
+from prism_core.core.vector_db import create_vector_db_router
 
 app = FastAPI()
 vector_db_router = create_vector_db_router("http://localhost:8080")

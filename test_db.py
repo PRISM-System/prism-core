@@ -21,7 +21,7 @@ from typing import List, Dict, Any
 # Add the current directory to Python path
 sys.path.append(os.path.dirname(os.path.abspath(__file__)))
 
-from core.data.postgresql import PostgreSQLDataStore
+from prism_core.core.data.postgresql import PostgreSQLDataStore
 
 class DatabaseTester:
     def __init__(self):
