@@ -835,3 +835,541 @@ test_results = test_tool_functionality()
 ```
 
 이제 Tool 시스템의 전체 동작 과정을 완전히 이해할 수 있습니다! 🚀 
+
+## 🤖 새로운 에이전트 생성 가이드
+
+PRISM-Core를 활용하여 새로운 AI 에이전트를 만드는 단계별 가이드입니다.
+
+### 1. 에이전트 아키텍처 설계
+
+```python
+# 예시: Manufacturing Performance Analysis Agent (MPA Agent)
+class ManufacturingPerformanceAgent:
+    """
+    제조 성능 분석 에이전트
+    
+    기능:
+    - DB에서 특정 구간 데이터 조회
+    - 보유 모델들의 성능 측정
+    - 최고 성능 모델로 미래 예측
+    - 이상 발생 가능성 높은 구간 분석
+    - Compliance 검증
+    """
+    
+    def __init__(self, agent_name: str = "mpa_agent"):
+        self.agent_name = agent_name
+        self.agent_manager = None
+        self.workflow_manager = None
+        self.tool_registry = None
+        self.llm_service = None
+        
+    def initialize_agent(self):
+        """에이전트 초기화"""
+        pass
+        
+    def setup_tools(self):
+        """에이전트 전용 도구 설정"""
+        pass
+        
+    def register_workflows(self):
+        """워크플로우 등록"""
+        pass
+```
+
+### 2. 에이전트별 설정 파일 구조
+
+```bash
+# mpa-agent/
+├── .env-local                    # 에이전트 전용 환경 설정
+├── docker-compose.yml           # 에이전트 서비스 구성
+├── src/
+│   ├── __init__.py
+│   ├── main.py                  # 에이전트 메인 진입점
+│   ├── config.py                # 설정 관리
+│   ├── agent/
+│   │   ├── __init__.py
+│   │   ├── mpa_agent.py         # 메인 에이전트 클래스
+│   │   ├── data_analyzer.py     # 데이터 분석 모듈
+│   │   ├── model_evaluator.py   # 모델 평가 모듈
+│   │   └── predictor.py         # 예측 모듈
+│   └── tools/
+│       ├── __init__.py
+│       ├── mpa_tool_setup.py    # MPA 전용 도구 설정
+│       ├── data_query_tool.py   # 데이터 조회 도구
+│       ├── model_performance_tool.py  # 모델 성능 측정 도구
+│       └── prediction_tool.py   # 예측 도구
+├── data/                        # 데이터 저장소
+├── models/                      # 모델 저장소
+└── logs/                        # 로그 저장소
+```
+
+### 3. 환경 설정 (.env-local)
+
+```bash
+# MPA Agent Server Configuration
+APP_BASE_URL=http://localhost:8200
+APP_HOST=0.0.0.0
+APP_PORT=8200
+RELOAD=true
+
+# vLLM Configuration
+OPENAI_BASE_URL=http://localhost:8001/v1
+VLLM_MODEL=Qwen/Qwen3-14B
+OPENAI_API_KEY=EMPTY
+
+# PRISM-Core API Configuration
+PRISM_CORE_BASE_URL=http://localhost:8000
+
+# Vector DB Configuration (MPA-specific instance)
+WEAVIATE_URL=http://localhost:18081
+WEAVIATE_API_KEY=
+
+# Vector Encoder Configuration
+VECTOR_ENCODER_MODEL=sentence-transformers/all-MiniLM-L6-v2
+VECTOR_DIM=384
+
+# Database Configuration (Manufacturing DB)
+MANUFACTURING_DB_URL=postgresql://user:pass@localhost:5432/manufacturing_db
+
+# Model Configuration
+MODEL_STORAGE_PATH=/app/models
+PERFORMANCE_THRESHOLD=0.85
+PREDICTION_HORIZON=24  # hours
+```
+
+### 4. 메인 에이전트 클래스 (수도 코드)
+
+```python
+from prism_core.core.agents import AgentManager, WorkflowManager
+from prism_core.core.tools import ToolRegistry
+from prism_core.core.llm import PrismLLMService
+
+class ManufacturingPerformanceAgent:
+    """
+    제조 성능 분석 에이전트 - 수도 코드
+    """
+    
+    def __init__(self):
+        # 1. 기본 설정 로드
+        self.load_configuration()
+        
+        # 2. 매니저 초기화
+        self.initialize_managers()
+        
+        # 3. 도구 설정
+        self.setup_agent_tools()
+        
+        # 4. 워크플로우 등록
+        self.register_workflows()
+        
+        # 5. LLM 서비스 연결
+        self.connect_llm_service()
+    
+    def load_configuration(self):
+        """설정 파일 로드"""
+        # .env-local에서 설정 로드
+        # 데이터베이스 연결 정보
+        # 모델 저장소 경로
+        # 성능 임계값 등
+    
+    def initialize_managers(self):
+        """매니저 초기화"""
+        # AgentManager 생성
+        # WorkflowManager 생성
+        # ToolRegistry 생성
+    
+    def setup_agent_tools(self):
+        """에이전트 전용 도구 설정"""
+        # 1. 데이터 조회 도구 (DataQueryTool)
+        # 2. 모델 성능 측정 도구 (ModelPerformanceTool)
+        # 3. 예측 도구 (PredictionTool)
+        # 4. 이상 탐지 도구 (AnomalyDetectionTool)
+        # 5. Compliance 검증 도구 (ComplianceTool)
+    
+    def register_workflows(self):
+        """워크플로우 등록"""
+        # 1. 데이터 분석 워크플로우
+        # 2. 모델 평가 워크플로우
+        # 3. 예측 워크플로우
+        # 4. 이상 탐지 워크플로우
+        # 5. Compliance 검증 워크플로우
+    
+    # === 핵심 비즈니스 로직 메서드들 ===
+    
+    def analyze_manufacturing_performance(self, time_range: dict, equipment_ids: list):
+        """
+        제조 성능 분석 메인 워크플로우
+        """
+        # 1. 데이터 조회
+        data = self.query_manufacturing_data(time_range, equipment_ids)
+        
+        # 2. 모델 성능 측정
+        model_performance = self.evaluate_model_performance(data)
+        
+        # 3. 최고 성능 모델 선택
+        best_model = self.select_best_model(model_performance)
+        
+        # 4. 미래 예측
+        predictions = self.predict_future_performance(best_model, data)
+        
+        # 5. 이상 탐지
+        anomalies = self.detect_anomalies(predictions, data)
+        
+        # 6. Compliance 검증
+        compliance_report = self.verify_compliance(anomalies, predictions)
+        
+        return {
+            "data": data,
+            "model_performance": model_performance,
+            "best_model": best_model,
+            "predictions": predictions,
+            "anomalies": anomalies,
+            "compliance_report": compliance_report
+        }
+    
+    def query_manufacturing_data(self, time_range: dict, equipment_ids: list):
+        """제조 데이터 조회"""
+        # 1. 데이터베이스에서 센서 데이터 조회
+        # 2. 설비 상태 데이터 조회
+        # 3. 품질 측정 데이터 조회
+        # 4. 환경 데이터 조회
+        # 5. 데이터 전처리 및 정규화
+    
+    def evaluate_model_performance(self, data: dict):
+        """모델 성능 평가"""
+        # 1. 보유 모델 목록 조회
+        # 2. 각 모델에 대해 성능 측정
+        # 3. 정확도, 정밀도, 재현율 계산
+        # 4. 교차 검증 수행
+        # 5. 성능 점수 정렬
+    
+    def select_best_model(self, model_performance: dict):
+        """최고 성능 모델 선택"""
+        # 1. 성능 점수 기준으로 정렬
+        # 2. 임계값 이상 모델 필터링
+        # 3. 안정성 점수 고려
+        # 4. 최종 모델 선택
+    
+    def predict_future_performance(self, model: dict, data: dict):
+        """미래 성능 예측"""
+        # 1. 모델 로드
+        # 2. 예측 기간 설정
+        # 3. 입력 데이터 준비
+        # 4. 예측 실행
+        # 5. 예측 결과 후처리
+    
+    def detect_anomalies(self, predictions: dict, historical_data: dict):
+        """이상 탐지"""
+        # 1. 예측값과 실제값 비교
+        # 2. 통계적 이상 탐지
+        # 3. 머신러닝 기반 이상 탐지
+        # 4. 이상 구간 식별
+        # 5. 위험도 점수 계산
+    
+    def verify_compliance(self, anomalies: dict, predictions: dict):
+        """Compliance 검증"""
+        # 1. 규정 준수 기준 로드
+        # 2. 예측 결과 검증
+        # 3. 이상 구간 규정 준수 확인
+        # 4. 위험도 평가
+        # 5. 권장사항 생성
+    
+    # === 워크플로우 실행 메서드들 ===
+    
+    def execute_data_analysis_workflow(self, parameters: dict):
+        """데이터 분석 워크플로우 실행"""
+        # 1. 워크플로우 정의
+        # 2. 단계별 실행
+        # 3. 결과 수집
+        # 4. 오류 처리
+    
+    def execute_model_evaluation_workflow(self, parameters: dict):
+        """모델 평가 워크플로우 실행"""
+        # 1. 모델 목록 조회
+        # 2. 성능 측정
+        # 3. 결과 비교
+        # 4. 최적 모델 선택
+    
+    def execute_prediction_workflow(self, parameters: dict):
+        """예측 워크플로우 실행"""
+        # 1. 모델 로드
+        # 2. 데이터 전처리
+        # 3. 예측 실행
+        # 4. 결과 검증
+    
+    def execute_anomaly_detection_workflow(self, parameters: dict):
+        """이상 탐지 워크플로우 실행"""
+        # 1. 데이터 분석
+        # 2. 이상 탐지 알고리즘 실행
+        # 3. 결과 필터링
+        # 4. 위험도 평가
+    
+    def execute_compliance_verification_workflow(self, parameters: dict):
+        """Compliance 검증 워크플로우 실행"""
+        # 1. 규정 기준 로드
+        # 2. 데이터 검증
+        # 3. 규정 준수 확인
+        # 4. 보고서 생성
+```
+
+### 5. 도구 설정 클래스 (수도 코드)
+
+```python
+from prism_core.core.tools import (
+    create_rag_search_tool,
+    create_compliance_tool,
+    create_memory_search_tool,
+    ToolRegistry
+)
+
+class MPAToolSetup:
+    """
+    MPA Agent 전용 도구 설정 클래스
+    """
+    
+    def __init__(self):
+        # MPA 전용 설정
+        self.weaviate_url = settings.WEAVIATE_URL
+        self.openai_base_url = settings.OPENAI_BASE_URL
+        self.openai_api_key = settings.OPENAI_API_KEY
+        self.encoder_model = settings.VECTOR_ENCODER_MODEL
+        self.vector_dim = settings.VECTOR_DIM
+        self.client_id = "mpa"
+        self.class_prefix = "MPA"
+        
+        # 도구 레지스트리
+        self.tool_registry = ToolRegistry()
+        
+        # MPA 전용 도구들
+        self.data_query_tool = None
+        self.model_performance_tool = None
+        self.prediction_tool = None
+        self.anomaly_detection_tool = None
+        self.compliance_tool = None
+    
+    def setup_tools(self) -> ToolRegistry:
+        """MPA 전용 도구들을 설정하고 등록"""
+        # 1. Data Query Tool 설정
+        # 2. Model Performance Tool 설정
+        # 3. Prediction Tool 설정
+        # 4. Anomaly Detection Tool 설정
+        # 5. Compliance Tool 설정
+        
+        return self.tool_registry
+    
+    def create_data_query_tool(self):
+        """데이터 조회 도구 생성"""
+        # 제조 데이터베이스 연결
+        # SQL 쿼리 실행
+        # 결과 전처리
+    
+    def create_model_performance_tool(self):
+        """모델 성능 측정 도구 생성"""
+        # 모델 로드
+        # 성능 메트릭 계산
+        # 결과 비교
+    
+    def create_prediction_tool(self):
+        """예측 도구 생성"""
+        # 모델 선택
+        # 예측 실행
+        # 결과 검증
+    
+    def create_anomaly_detection_tool(self):
+        """이상 탐지 도구 생성"""
+        # 이상 탐지 알고리즘
+        # 임계값 설정
+        # 결과 필터링
+    
+    def create_compliance_tool(self):
+        """Compliance 검증 도구 생성"""
+        # 규정 기준 로드
+        # 데이터 검증
+        # 보고서 생성
+```
+
+### 6. 워크플로우 정의 (수도 코드)
+
+```python
+def define_mpa_workflows(workflow_manager: WorkflowManager):
+    """MPA Agent 워크플로우 정의"""
+    
+    # 1. 데이터 분석 워크플로우
+    data_analysis_steps = [
+        {
+            "name": "query_manufacturing_data",
+            "type": "tool_call",
+            "tool_name": "data_query_tool",
+            "parameters": {
+                "time_range": "{{time_range}}",
+                "equipment_ids": "{{equipment_ids}}"
+            }
+        },
+        {
+            "name": "preprocess_data",
+            "type": "tool_call",
+            "tool_name": "data_preprocessing_tool",
+            "parameters": {
+                "data": "{{query_manufacturing_data.output}}"
+            }
+        }
+    ]
+    
+    # 2. 모델 평가 워크플로우
+    model_evaluation_steps = [
+        {
+            "name": "load_models",
+            "type": "tool_call",
+            "tool_name": "model_loader_tool",
+            "parameters": {
+                "model_path": "{{model_storage_path}}"
+            }
+        },
+        {
+            "name": "evaluate_performance",
+            "type": "tool_call",
+            "tool_name": "model_performance_tool",
+            "parameters": {
+                "models": "{{load_models.output}}",
+                "data": "{{preprocessed_data}}"
+            }
+        }
+    ]
+    
+    # 3. 예측 워크플로우
+    prediction_steps = [
+        {
+            "name": "select_best_model",
+            "type": "condition",
+            "condition": "context['model_performance']['best_model']"
+        },
+        {
+            "name": "execute_prediction",
+            "type": "tool_call",
+            "tool_name": "prediction_tool",
+            "parameters": {
+                "model": "{{select_best_model.output}}",
+                "data": "{{preprocessed_data}}"
+            }
+        }
+    ]
+    
+    # 4. 이상 탐지 워크플로우
+    anomaly_detection_steps = [
+        {
+            "name": "detect_anomalies",
+            "type": "tool_call",
+            "tool_name": "anomaly_detection_tool",
+            "parameters": {
+                "predictions": "{{execute_prediction.output}}",
+                "historical_data": "{{preprocessed_data}}"
+            }
+        }
+    ]
+    
+    # 5. Compliance 검증 워크플로우
+    compliance_verification_steps = [
+        {
+            "name": "verify_compliance",
+            "type": "tool_call",
+            "tool_name": "compliance_tool",
+            "parameters": {
+                "anomalies": "{{detect_anomalies.output}}",
+                "predictions": "{{execute_prediction.output}}"
+            }
+        }
+    ]
+    
+    # 워크플로우 등록
+    workflow_manager.define_workflow("data_analysis", data_analysis_steps)
+    workflow_manager.define_workflow("model_evaluation", model_evaluation_steps)
+    workflow_manager.define_workflow("prediction", prediction_steps)
+    workflow_manager.define_workflow("anomaly_detection", anomaly_detection_steps)
+    workflow_manager.define_workflow("compliance_verification", compliance_verification_steps)
+```
+
+### 7. 메인 실행 파일 (수도 코드)
+
+```python
+# main.py
+from fastapi import FastAPI
+from src.agent.mpa_agent import ManufacturingPerformanceAgent
+
+app = FastAPI(title="MPA Agent", version="1.0.0")
+
+# 에이전트 초기화
+mpa_agent = ManufacturingPerformanceAgent()
+
+@app.post("/api/analyze_performance")
+async def analyze_manufacturing_performance(request: dict):
+    """제조 성능 분석 API 엔드포인트"""
+    try:
+        # 1. 요청 파라미터 검증
+        time_range = request.get("time_range")
+        equipment_ids = request.get("equipment_ids")
+        
+        # 2. 성능 분석 실행
+        result = mpa_agent.analyze_manufacturing_performance(
+            time_range=time_range,
+            equipment_ids=equipment_ids
+        )
+        
+        return {
+            "success": True,
+            "data": result
+        }
+        
+    except Exception as e:
+        return {
+            "success": False,
+            "error": str(e)
+        }
+
+@app.post("/api/execute_workflow/{workflow_name}")
+async def execute_workflow(workflow_name: str, context: dict):
+    """워크플로우 실행 API 엔드포인트"""
+    try:
+        # 워크플로우 실행
+        result = mpa_agent.workflow_manager.execute_workflow(
+            workflow_name, context
+        )
+        
+        return {
+            "success": True,
+            "result": result
+        }
+        
+    except Exception as e:
+        return {
+            "success": False,
+            "error": str(e)
+        }
+
+if __name__ == "__main__":
+    import uvicorn
+    uvicorn.run(app, host="0.0.0.0", port=8200)
+```
+
+### 8. 배포 및 실행
+
+```bash
+# 1. 에이전트 빌드
+cd mpa-agent
+docker build -t mpa-agent:latest .
+
+# 2. 서비스 시작
+docker-compose up -d
+
+# 3. API 테스트
+curl -X POST "http://localhost:8200/api/analyze_performance" \
+  -H "Content-Type: application/json" \
+  -d '{
+    "time_range": {
+      "start": "2024-01-01T00:00:00Z",
+      "end": "2024-01-31T23:59:59Z"
+    },
+    "equipment_ids": ["EQ001", "EQ002", "EQ003"]
+  }'
+```
+
+이제 PRISM-Core를 활용하여 새로운 에이전트를 만드는 전체 과정을 이해할 수 있습니다! 🚀 
