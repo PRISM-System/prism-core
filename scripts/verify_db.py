@@ -5,7 +5,7 @@ from dotenv import load_dotenv
 # Add the parent directory to the Python path to allow sibling imports
 sys.path.append(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 
-from core.data.postgresql import PostgreSQLDataStore
+from prism_core.core.data.postgresql import PostgreSQLDataStore
 
 def verify_database_contents():
     """

@@ -1,11 +1,11 @@
 from fastapi import FastAPI
-from core.llm import AgentRegistry, create_llm_router
-from core.llm import ToolRegistry
-from core.data.service import DatabaseService
-from core.data.api import create_db_router
-from core.tools import ToolRegistry, DatabaseTool, RAGSearchTool, ComplianceTool, MemorySearchTool
-from core.config import settings
-from core.vector_db.api import create_vector_db_router
+from prism_core.core.llm import AgentRegistry, create_llm_router
+from prism_core.core.llm import ToolRegistry
+from prism_core.core.data.service import DatabaseService
+from prism_core.core.data.api import create_db_router
+from prism_core.core.tools import ToolRegistry, DatabaseTool, RAGSearchTool, ComplianceTool, MemorySearchTool
+from prism_core.core.config import settings
+from prism_core.core.vector_db.api import create_vector_db_router
 
 # FastAPI 앱 생성
 app = FastAPI(
@@ -38,7 +38,7 @@ tool_registry.register_tool(memory_search_tool)
 
 # Agent 시스템 초기화 (Tool Registry와 연결)
 agent_registry = AgentRegistry(tool_registry)
-from core.llm import PrismLLMService
+from prism_core.core.llm import PrismLLMService
 llm_service = PrismLLMService()
 
 # API 라우터들 생성 및 포함
