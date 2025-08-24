@@ -1,6 +1,6 @@
 [project]
 name = "prism_core"
-version = "0.2.3"
+version = "0.2.4"
 description = "PRISM Core - 산업용 데이터베이스와 LLM 기반 Multi-Agent 시스템을 활용한 지능형 제조 공정 분석 플랫폼 엔진"
 authors = [
     {name = "PRISM Team", email = "prism@example.com"}
@@ -21,13 +21,15 @@ requires-python = ">=3.10"
 dependencies = [
     "pydantic>=2.11.7",
     "vllm>=0.10.0",
-    "fastapi",
-    "uvicorn[standard]",
-    "pydantic-settings",
+    "fastapi>=0.100.0",
+    "uvicorn[standard]>=0.20.0",
+    "pydantic-settings>=2.0.0",
     "click>=8.2.1",
-    "python-dotenv",
-    "huggingface_hub",
-    "psycopg2-binary",
+    "python-dotenv>=1.0.0",
+    "huggingface_hub>=0.15.0",
+    "psycopg2-binary>=2.9.0",
+    "weaviate-client>=4.0.0",
+    "mem0ai>=0.1.116",
 ]
 
 [project.optional-dependencies]
@@ -51,7 +53,7 @@ package-dir = {"" = "."}
 
 [tool.setuptools.packages.find]
 where = ["."]
-include = ["core*"]
+include = ["prism_core*"]
 exclude = ["tests*"]
 
 [tool.black]

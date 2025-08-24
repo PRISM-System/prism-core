@@ -5,7 +5,7 @@ This package provides core components for building multi-agent systems
 with large language models and vector databases.
 """
 
-__version__ = "0.2.3"
+__version__ = "0.2.4"
 
 # Re-export everything from core
 from .core import * 
