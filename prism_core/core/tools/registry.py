@@ -1,7 +1,6 @@
 from typing import Dict, List, Optional
 from .base import BaseTool
 from .schemas import ToolInfo, ToolRegistrationRequest
-from .dynamic_tool import DynamicTool
 
 
 class ToolRegistry:
@@ -47,7 +46,8 @@ class ToolRegistry:
         if request.tool_type not in valid_types:
             raise ValueError(f"Invalid tool type '{request.tool_type}'. Must be one of: {valid_types}")
         
-        # Create dynamic tool
+        # Create dynamic tool (lazy import)
+        from .dynamic_tool import DynamicTool
         tool = DynamicTool(
             name=request.name,
             description=request.description,

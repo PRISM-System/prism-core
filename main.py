@@ -55,9 +55,9 @@ app.include_router(llm_router, prefix="/api")
 db_router = create_db_router(db_service)
 app.include_router(db_router, prefix="/api")
 
-# Vector-DB API (Weaviate 프록시)
-vector_router = create_vector_db_router(settings.WEAVIATE_URL, settings.WEAVIATE_API_KEY)
-app.include_router(vector_router, prefix="/api")
+# # Vector-DB API (Weaviate 프록시)
+# vector_router = create_vector_db_router(settings.WEAVIATE_URL, settings.WEAVIATE_API_KEY)
+# app.include_router(vector_router, prefix="/api")
 
 @app.get("/")
 def read_root():
