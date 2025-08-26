@@ -29,7 +29,7 @@ class ToolRegistrationRequest(BaseModel):
     name: str = Field(..., description="Unique tool name")
     description: str = Field(..., description="Tool description")
     parameters_schema: Dict[str, Any] = Field(..., description="JSON schema for tool parameters")
-    tool_type: str = Field(..., description="Type of tool (e.g., 'database', 'api', 'calculation')")
+    tool_type: str = Field(..., description="Type of tool (e.g., 'database', 'api', 'calculation', 'function')")
 
 
 class AgentToolAssignment(BaseModel):

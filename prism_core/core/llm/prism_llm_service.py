@@ -1,3 +1,4 @@
+from logging import warning
 from typing import Any, Dict, List, Optional
 import random
 import time
@@ -137,18 +138,23 @@ class PrismLLMService(BaseLLMService):
 
         return enhanced_response
     
-    def _map_tools_to_openai(self) -> List[Dict[str, Any]]:
+    def _map_tools_to_openai(self, tool_list: List[str]) -> List[Dict[str, Any]]:
         """ToolRegistry의 도구들을 OpenAI tools 포맷으로 매핑"""
         tools: List[Dict[str, Any]] = []
-        for tool in self.tool_registry.list_tools():
-            tools.append({
-                "type": "function",
-                "function": {
-                    "name": tool.name,
-                    "description": getattr(tool, "description", ""),
-                    "parameters": getattr(tool, "parameters_schema", {}),
-                },
-            })
+        for tool in tool_list:
+            total_tool_for_agent = self.tool_registry.get_tool(tool)
+            # check all tool names in tool_list exist in total_tool_for_agent
+            if all(tool_name in total_tool_for_agent for tool_name in tool_list):
+                tools.append({
+                    "type": "function",
+                    "function": {
+                        "name": tool.name,
+                        "description": getattr(tool, "description", ""),
+                        "parameters": getattr(tool, "parameters_schema", {}),
+                    },
+                })
+            else:
+                warning(f"도구 '{tool}'는 해당 에이전트에 존재하지 않습니다.")
         return tools
     
     def register_agent(self, agent: Agent) -> bool:
@@ -333,7 +339,7 @@ class PrismLLMService(BaseLLMService):
             {"role": "user", "content": request.prompt},
         ]
 
-        tools_spec = self._map_tools_to_openai() if (request.use_tools and agent.tools) else None
+        tools_spec = self._map_tools_to_openai(request.tool_for_use) if (request.use_tools and agent.tools) else None
         max_tool_calls = getattr(request, "max_tool_calls", 3) or 3
 
         # Tool call 루프

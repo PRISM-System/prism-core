@@ -42,7 +42,7 @@ class ToolRegistry:
             raise ValueError(f"Tool with name '{request.name}' is already registered")
         
         # Validate tool type
-        valid_types = ["api", "calculation", "custom", "database"]
+        valid_types = ["api", "calculation", "function", "database"]
         if request.tool_type not in valid_types:
             raise ValueError(f"Invalid tool type '{request.tool_type}'. Must be one of: {valid_types}")
         
