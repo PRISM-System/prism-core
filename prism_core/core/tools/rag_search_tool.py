@@ -356,4 +356,215 @@ class RAGSearchTool(BaseTool):
     def _validate_and_regenerate_embeddings(self) -> None:
         """임베딩 검증 및 재생성"""
         # Weaviate는 자동으로 임베딩을 생성하므로 별도 검증 불필요
-        pass 
+        pass
+    
+    def upload_documents(self, documents: List[Dict[str, Any]], domain: str = "compliance") -> Dict[str, Any]:
+        """
+        문서를 특정 도메인에 업로드
+        
+        Args:
+            documents: 업로드할 문서 리스트 (title, content, metadata 포함)
+            domain: 업로드 대상 도메인 (research, history, compliance)
+        
+        Returns:
+            업로드 결과 (성공 개수, 실패 개수 등)
+        """
+        try:
+            # 인덱스 초기화 확인
+            self._ensure_index_and_seed()
+            
+            # 도메인별 클래스 선택
+            class_name = self._get_class_name(domain)
+            
+            success_count = 0
+            failed_count = 0
+            
+            for doc in documents:
+                try:
+                    # 문서 데이터 준비
+                    properties = {
+                        "title": doc.get("title", ""),
+                        "content": doc.get("content", ""),
+                        "metadata": str(doc.get("metadata", {}))
+                    }
+                    
+                    # Weaviate에 문서 추가
+                    response = requests.post(
+                        f"{self._weaviate_url}/v1/objects",
+                        json={
+                            "class": class_name,
+                            "properties": properties
+                        },
+                        headers={"Content-Type": "application/json"},
+                        timeout=15,
+                    )
+                    
+                    if response.status_code in [200, 201]:
+                        success_count += 1
+                    else:
+                        failed_count += 1
+                        print(f"⚠️  문서 업로드 실패: {response.status_code} - {doc.get('title', 'Unknown')}")
+                        
+                except Exception as e:
+                    failed_count += 1
+                    print(f"⚠️  문서 업로드 중 오류: {str(e)} - {doc.get('title', 'Unknown')}")
+            
+            result = {
+                "success": True,
+                "domain": domain,
+                "class_name": class_name,
+                "total": len(documents),
+                "uploaded": success_count,
+                "failed": failed_count
+            }
+            
+            print(f"✅ 문서 업로드 완료: {success_count}/{len(documents)} 성공 ({domain} 도메인)")
+            return result
+            
+        except Exception as e:
+            error_msg = f"문서 업로드 실패: {str(e)}"
+            print(f"❌ {error_msg}")
+            return {
+                "success": False,
+                "error": error_msg,
+                "domain": domain,
+                "total": len(documents),
+                "uploaded": 0,
+                "failed": len(documents)
+            }
+    
+    def batch_upload_documents(self, documents: List[Dict[str, Any]], domain: str = "compliance", batch_size: int = 100) -> Dict[str, Any]:
+        """
+        배치로 대량 문서 업로드
+        
+        Args:
+            documents: 업로드할 문서 리스트
+            domain: 업로드 대상 도메인
+            batch_size: 배치 크기
+        
+        Returns:
+            업로드 결과
+        """
+        try:
+            # 인덱스 초기화 확인
+            self._ensure_index_and_seed()
+            
+            # 도메인별 클래스 선택
+            class_name = self._get_class_name(domain)
+            
+            total_success = 0
+            total_failed = 0
+            
+            # 배치 처리
+            for i in range(0, len(documents), batch_size):
+                batch = documents[i:i + batch_size]
+                batch_objects = []
+                
+                for doc in batch:
+                    batch_objects.append({
+                        "class": class_name,
+                        "properties": {
+                            "title": doc.get("title", ""),
+                            "content": doc.get("content", ""),
+                            "metadata": str(doc.get("metadata", {}))
+                        }
+                    })
+                
+                try:
+                    # Weaviate 배치 업로드
+                    response = requests.post(
+                        f"{self._weaviate_url}/v1/batch/objects",
+                        json={"objects": batch_objects},
+                        headers={"Content-Type": "application/json"},
+                        timeout=30,
+                    )
+                    
+                    if response.status_code in [200, 201]:
+                        total_success += len(batch)
+                    else:
+                        total_failed += len(batch)
+                        print(f"⚠️  배치 업로드 실패: {response.status_code}")
+                        
+                except Exception as e:
+                    total_failed += len(batch)
+                    print(f"⚠️  배치 업로드 중 오류: {str(e)}")
+                
+                # 진행상황 출력
+                progress = ((i + len(batch)) / len(documents)) * 100
+                print(f"📊 업로드 진행: {progress:.1f}% ({i + len(batch)}/{len(documents)})")
+            
+            result = {
+                "success": True,
+                "domain": domain,
+                "class_name": class_name,
+                "total": len(documents),
+                "uploaded": total_success,
+                "failed": total_failed
+            }
+            
+            print(f"✅ 배치 업로드 완료: {total_success}/{len(documents)} 성공 ({domain} 도메인)")
+            return result
+            
+        except Exception as e:
+            error_msg = f"배치 업로드 실패: {str(e)}"
+            print(f"❌ {error_msg}")
+            return {
+                "success": False,
+                "error": error_msg,
+                "domain": domain,
+                "total": len(documents),
+                "uploaded": 0,
+                "failed": len(documents)
+            }
+    
+    def check_document_exists(self, title: str, domain: str = "compliance") -> bool:
+        """
+        문서 존재 여부 확인
+        
+        Args:
+            title: 확인할 문서 제목
+            domain: 검색할 도메인
+        
+        Returns:
+            문서 존재 여부
+        """
+        try:
+            class_name = self._get_class_name(domain)
+            
+            # Weaviate GraphQL 쿼리
+            query = {
+                "query": f'''
+                {{
+                    Get {{
+                        {class_name}(
+                            where: {{
+                                path: ["title"]
+                                operator: Equal
+                                valueText: "{title}"
+                            }}
+                            limit: 1
+                        ) {{
+                            title
+                        }}
+                    }}
+                }}
+                '''
+            }
+            
+            response = requests.post(
+                f"{self._weaviate_url}/v1/graphql",
+                json=query,
+                headers={"Content-Type": "application/json"},
+                timeout=10,
+            )
+            
+            if response.status_code == 200:
+                data = response.json()
+                results = data.get("data", {}).get("Get", {}).get(class_name, [])
+                return len(results) > 0
+            
+            return False
+            
+        except Exception as e:
+            print(f"⚠️  문서 존재 확인 실패: {str(e)}")
+            return False 
