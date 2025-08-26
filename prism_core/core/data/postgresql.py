@@ -17,16 +17,25 @@ class PostgreSQLDataStore(BaseDataStore):
             db_url: The database connection URL (e.g., "postgresql://user:password@host:port/dbname").
         """
         self.conn = psycopg2.connect(db_url)
+        # Ensure a failed statement doesn't poison subsequent commands
+        self.conn.autocommit = True
 
     def _execute(self, query: str, params: tuple = None, fetch=None):
-        """Helper method to execute queries."""
+        """Helper method to execute queries with rollback on error."""
         with self.conn.cursor(cursor_factory=DictCursor) as cur:
-            cur.execute(query, params)
-            if fetch == "one":
-                return cur.fetchone()
-            if fetch == "all":
-                return cur.fetchall()
-            self.conn.commit()
+            try:
+                cur.execute(query, params)
+                if fetch == "one":
+                    return cur.fetchone()
+                if fetch == "all":
+                    return cur.fetchall()
+                # autocommit mode: no explicit commit required
+            except Exception:
+                try:
+                    self.conn.rollback()
+                except Exception:
+                    pass
+                raise
 
     def add(self, data: Dict[str, Any], table_name: str) -> Any:
         columns = ", ".join(data.keys())
