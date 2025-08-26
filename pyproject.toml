@@ -1,6 +1,6 @@
 [project]
 name = "prism_core"
-version = "0.2.7"
+version = "0.2.8"
 description = "PRISM Core - 산업용 데이터베이스와 LLM 기반 Multi-Agent 시스템을 활용한 지능형 제조 공정 분석 플랫폼 엔진"
 authors = [
     {name = "PRISM Team", email = "prism@example.com"}
