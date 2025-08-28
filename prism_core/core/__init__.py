@@ -19,8 +19,14 @@ try:
     )
     from .llm.agent_registry import AgentRegistry
 except ImportError:
-    # LLM 의존성이 없는 경우 무시
-    pass
+    # LLM 의존성이 없는 경우 기본 클래스 정의
+    BaseLLMService = None
+    LLMGenerationRequest = None
+    GenerationResponse = None
+    Agent = None
+    AgentResponse = None
+    AgentInvokeRequest = None
+    AgentRegistry = None
 
 # Vector DB 모듈 import  
 try:
@@ -33,8 +39,13 @@ try:
         IndexConfig
     )
 except ImportError:
-    # Vector DB 의존성이 없는 경우 무시
-    pass
+    # Vector DB 의존성이 없는 경우 기본 클래스 정의
+    WeaviateClient = None
+    VectorDBAPI = None
+    DocumentSchema = None
+    SearchQuery = None
+    SearchResult = None
+    IndexConfig = None
 
 # Tools 모듈 import
 try:
@@ -42,8 +53,11 @@ try:
     from .tools.registry import ToolRegistry
     from .tools.schemas import ToolRequest, ToolResponse
 except ImportError:
-    # Tools 의존성이 없는 경우 무시
-    pass
+    # Tools 의존성이 없는 경우 기본 클래스 정의
+    BaseTool = None
+    ToolRegistry = None
+    ToolRequest = None
+    ToolResponse = None
 
 # Agents 모듈 import
 try:
@@ -51,8 +65,10 @@ try:
     from .agents.agent_manager import AgentManager
     from .agents.workflow_manager import WorkflowManager
 except ImportError:
-    # Agents 의존성이 없는 경우 무시
-    pass
+    # Agents 의존성이 없는 경우 기본 클래스 정의
+    BaseAgent = None
+    AgentManager = None
+    WorkflowManager = None
 
 __all__ = [
     "__version__",
