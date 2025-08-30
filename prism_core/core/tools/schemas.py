@@ -13,6 +13,7 @@ class ToolResponse(BaseModel):
     success: bool = Field(..., description="Whether the tool execution was successful")
     result: Any = Field(None, description="Tool execution result")
     message: Optional[str] = Field(None, description="General message about the execution")
+    count: Optional[int] = Field(None, description="Number of results")
     error_message: Optional[str] = Field(None, description="Error message if execution failed")
     execution_time_ms: Optional[float] = Field(None, description="Tool execution time in milliseconds")
 
