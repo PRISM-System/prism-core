@@ -23,9 +23,8 @@ services:
               count: all
               capabilities: [gpu]
     command: ./run.sh
-    depends_on:
-      - db
-      - vllm
+    networks:
+      - prism-shared-network
 
   vllm:
     image: vllm/vllm-openai:latest
@@ -37,6 +36,7 @@ services:
       --model ${VLLM_MODEL}
       --host ${VLLM_HOST:-0.0.0.0}
       --port ${VLLM_PORT:-8001}
+      --gpu-memory-utilization 0.6
       ${VLLM_ARGS:- --enable-auto-tool-choice --tool-call-parser hermes}
     ports:
       - "${VLLM_PORT:-8001}:${VLLM_PORT:-8001}"
@@ -49,6 +49,14 @@ services:
             - driver: nvidia
               count: all
               capabilities: [gpu]
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:8001/health"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+      start_period: 60s
+    networks:
+      - prism-shared-network
 
   db:
     image: postgres:15-alpine
@@ -58,9 +66,20 @@ services:
       - POSTGRES_PASSWORD=mysecretpassword
       - POSTGRES_DB=mydatabase
     volumes:
-      - postgres_data:/var/lib/postgresql/data
+      - postgres_data:/var/lib/postgresql/data  
     ports:
       - "5432:5432"
+    networks:
+      - prism-shared-network
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U myuser -d mydatabase"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
 
 volumes:
   postgres_data:
+
+networks:
+  prism-shared-network:
+    external: true

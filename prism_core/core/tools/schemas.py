@@ -23,6 +23,7 @@ class ToolInfo(BaseModel):
     name: str = Field(..., description="Tool name")
     description: str = Field(..., description="Tool description")
     parameters_schema: Dict[str, Any] = Field(..., description="JSON schema for tool parameters")
+    tool_type: str = Field(..., description="Type of tool (e.g., 'database', 'api', 'calculation', 'function')")
 
 
 class ToolRegistrationRequest(BaseModel):

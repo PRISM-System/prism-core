@@ -83,7 +83,8 @@ class ToolRegistry:
             ToolInfo(
                 name=tool.name,
                 description=tool.description,
-                parameters_schema=tool.parameters_schema
+                parameters_schema=tool.parameters_schema,
+                tool_type=tool.tool_type,
             )
             for tool in self._tools.values()
         ]
