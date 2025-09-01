@@ -14,8 +14,8 @@ from ..config import settings
 
 try:
     from mem0 import Memory
-    from openai import OpenAI
-    MEM0_AVAILABLE = True
+    from mem0.configs.base import MemoryConfig
+    MEM0_AVAILABLE = False
 except ImportError:
     MEM0_AVAILABLE = False
     print("⚠️  Mem0 라이브러리가 설치되지 않았습니다. 기본 메모리 검색만 사용 가능합니다.")
@@ -36,8 +36,11 @@ class MemorySearchTool(BaseTool):
                  weaviate_url: Optional[str] = None,
                  openai_base_url: Optional[str] = None,
                  openai_api_key: Optional[str] = None,
+                 model_name: Optional[str] = None,
+                 embedder_model_name: Optional[str] = None,
                  client_id: str = "default",
-                 class_prefix: str = "Default"):
+                 class_prefix: str = "Default",
+                 tool_type: str = "api"):
         super().__init__(
             name="memory_search",
             description="사용자의 과거 상호작용 기록을 검색하여 개인화된 응답을 제공합니다",
@@ -60,13 +63,26 @@ class MemorySearchTool(BaseTool):
                     }
                 },
                 "required": ["query", "user_id"]
-            }
+            },
+            tool_type=tool_type
         )
-        # 에이전트별 설정 또는 기본값 사용
-        self._weaviate_url = weaviate_url or settings.WEAVIATE_URL
+        # 기존 설정 활용
+        self._weaviate_url = weaviate_url or f"http://localhost:18080"  # WEAVIATE_PORT from .env.example
         self._openai_base_url = openai_base_url or settings.VLLM_OPENAI_BASE_URL
         self._openai_api_key = openai_api_key or settings.OPENAI_API_KEY
         self._client_id = client_id
+        self._model_name = model_name or settings.VLLM_MODEL
+        self._embedder_model_name = embedder_model_name or settings.VECTOR_ENCODER_MODEL
+        
+        # 디버그: 파라미터 설정 확인
+        print(f"🔧 MemorySearchTool 초기화 파라미터:")
+        print(f"   - weaviate_url: {self._weaviate_url}")
+        print(f"   - openai_base_url: {self._openai_base_url}")
+        print(f"   - openai_api_key: {self._openai_api_key[:10]}..." if self._openai_api_key != "EMPTY" else "   - openai_api_key: EMPTY")
+        print(f"   - model_name: {self._model_name}")
+        print(f"   - embedder_model_name: {self._embedder_model_name}")
+        print(f"   - client_id: {self._client_id}")
+        print(f"   - class_prefix: {class_prefix}")
         
         # 에이전트별 클래스명 설정
         self._class_history = f"{class_prefix}History"
@@ -74,27 +90,60 @@ class MemorySearchTool(BaseTool):
         # Mem0 초기화
         self._mem0_initialized = False
         self._memory: Optional[Memory] = None
-        self._openai_client: Optional[OpenAI] = None
         
         if MEM0_AVAILABLE:
             self._initialize_mem0()
 
     def _initialize_mem0(self) -> None:
-        """Mem0 초기화"""
+        """Mem0 초기화 - .env.example 설정 기준"""
         try:
-            # OpenAI 클라이언트 초기화 (Mem0에서 사용)
-            # self._openai_client = OpenAI(
-            #     base_url=settings.OPENAI_BASE_URL or "http://localhost:8001/v1",
-            #     api_key=settings.OPENAI_API_KEY
-            # )
+            # .env.example 설정을 활용한 Mem0 설정 구성
+            config = MemoryConfig(
+                vector_store={
+                    "provider": "weaviate",
+                    "config": { "cluster_url": self._weaviate_url }
+                },
+                llm={
+                    "provider": "openai",
+                    "config": { "api_key": self._openai_api_key if self._openai_api_key != "EMPTY" else "EMPTY", "base_url": self._openai_base_url, "model": self._model_name  # VLLM_MODEL from .env.example }
+                    }
+                },
+                embedder={
+                    "provider": "huggingface",
+                    # "config": {"model_name": self._embedder_model_name}  # VECTOR_ENCODER_MODEL from .env.example, "device": "cuda"  # GPU 사용 시 "cuda"로 변경 가능
+                }
+            )
             
-            # Mem0 메모리 인스턴스 생성
-            self._memory = Memory()
+            # 디버그: Mem0 설정 확인
+            # print(f"🔧 Mem0 설정 구성:")
+            # print(f"   - Vector Store: {config.vector_store.provider} ({config.vector_store.config.cluster_url})")
+            # print(f"   - LLM: {config.llm.provider} ({config.llm.config["base_url"]})")
+            # print(f"   - LLM Model: {config.llm.config['model']}")
+            # print(f"   - Embedder: {config.embedder.provider} ({config.embedder.config['model_name']})")
+            # print(f"   - Embedder Device: {config.embedder.config['device']}")
+            
+            # Mem0 인스턴스 생성
+            self._memory = Memory(config=config)
             self._mem0_initialized = True
             
-            print("✅ Mem0 메모리 시스템 초기화 완료")
+            print("✅ Mem0 메모리 시스템 초기화 완료 (.env.example 설정 기준)")
+            print(f"   - Vector Store: Weaviate ({self._weaviate_url})")
+            print(f"   - LLM: OpenAI-compatible ({self._openai_base_url})")
+            print(f"   - Model: {self._model_name}")
+            print(f"   - Embedder: {self._embedder_model_name}")
             
         except Exception as e:
+            import traceback
+            error_info = traceback.extract_tb(e.__traceback__)
+            error_line = error_info[-1].lineno
+            error_msg = str(e)
+            error_type = type(e).__name__
+            error_trace = traceback.format_exc()
+            
+            print(f"⚠️  Error occurred on line {error_line}")
+            print(f"⚠️  Error type: {error_type}")
+            print(f"⚠️  Error message: {error_msg}")
+            print(f"⚠️  Full traceback:\n{error_trace}")
             print(f"⚠️  Mem0 초기화 실패: {str(e)}")
             self._mem0_initialized = False
 
@@ -110,7 +159,7 @@ class MemorySearchTool(BaseTool):
             
             # Mem0가 사용 가능한 경우 우선 사용
             if self._mem0_initialized and self._memory:
-                memories = await self._search_with_mem0(query, user_id, top_k, memory_type)
+                memories = await self._search_with_mem0(query, user_id, top_k)
             else:
                 # Mem0가 없는 경우 Vector DB 사용
                 memories = await self._search_with_vector_db(query, user_id, top_k)
@@ -139,15 +188,14 @@ class MemorySearchTool(BaseTool):
                 error=f"메모리 검색 실패: {str(e)}"
             )
 
-    async def _search_with_mem0(self, query: str, user_id: str, top_k: int, memory_type: str) -> List[Dict[str, Any]]:
-        """Mem0를 사용한 메모리 검색"""
+    async def _search_with_mem0(self, query: str, user_id: str, top_k: int) -> List[Dict[str, Any]]:
+        """Mem0를 사용한 메모리 검색 - 공식 문서에 따른 올바른 방식"""
         try:
             # Mem0 검색 실행
             search_result = self._memory.search(
                 query=query,
                 user_id=user_id,
-                limit=top_k,
-                memory_type=memory_type
+                limit=top_k
             )
             
             memories = []
@@ -156,7 +204,7 @@ class MemorySearchTool(BaseTool):
                     "content": result.get("content", ""),
                     "score": result.get("score", 0.0),
                     "timestamp": result.get("timestamp", ""),
-                    "memory_type": memory_type,
+                    "memory_type": "user",
                     "source": "mem0"
                 }
                 memories.append(memory_entry)
@@ -243,19 +291,20 @@ class MemorySearchTool(BaseTool):
             print(f"⚠️  사용자 컨텍스트 조회 실패: {str(e)}")
             return {"user_id": user_id}
 
-    async def add_memory(self, user_id: str, content: str, memory_type: str = "user") -> bool:
-        """새로운 메모리 추가"""
+    async def add_memory(self, user_id: str, messages: List[Dict[str, str]], metadata: Optional[Dict[str, Any]] = None) -> bool:
+        """새로운 메모리 추가 - 공식 문서에 따른 올바른 방식"""
         try:
             if self._mem0_initialized and self._memory:
-                # Mem0에 메모리 추가
-                self._memory.add(
-                    content=content,
+                # Mem0에 메모리 추가 (공식 문서 방식)
+                result = self._memory.add(
+                    messages=messages,
                     user_id=user_id,
-                    memory_type=memory_type
+                    metadata=metadata or {}
                 )
                 return True
             else:
-                # Weaviate에 메모리 추가
+                # Weaviate에 메모리 추가 (Fallback)
+                content = "\n".join([msg.get("content", "") for msg in messages])
                 response = requests.post(
                     f"{self._weaviate_url}/v1/objects",
                     json={
@@ -263,7 +312,7 @@ class MemorySearchTool(BaseTool):
                         "properties": {
                             "title": f"Memory for {user_id}",
                             "content": content,
-                            "metadata": f'{{"user_id": "{user_id}", "memory_type": "{memory_type}", "timestamp": "2024-01-01T00:00:00Z"}}'
+                            "metadata": f'{{"user_id": "{user_id}", "memory_type": "user", "timestamp": "2024-01-01T00:00:00Z"}}'
                         }
                     },
                     timeout=10,
@@ -272,4 +321,60 @@ class MemorySearchTool(BaseTool):
                 
         except Exception as e:
             print(f"⚠️  메모리 추가 실패: {str(e)}")
-            return False 
+            return False
+
+    async def get_user_memory_summary(self, user_id: str) -> Dict[str, Any]:
+        """사용자 메모리 요약 조회 - 공식 문서에 따른 올바른 방식"""
+        try:
+            if self._mem0_initialized and self._memory:
+                # Mem0를 사용한 메모리 요약
+                all_memories = self._memory.get_all(user_id=user_id)
+                
+                summary = {
+                    "user_id": user_id,
+                    "total_memories": len(all_memories),
+                    "recent_memories": all_memories[-5:] if len(all_memories) > 5 else all_memories,
+                    "memory_types": {},
+                    "last_updated": all_memories[-1].get("timestamp", "") if all_memories else ""
+                }
+                
+                return summary
+            else:
+                # Vector DB를 사용한 메모리 요약
+                return await self._get_vector_db_summary(user_id)
+                
+        except Exception as e:
+            print(f"⚠️  메모리 요약 조회 실패: {str(e)}")
+            return {"user_id": user_id, "error": str(e)}
+
+    async def _get_vector_db_summary(self, user_id: str) -> Dict[str, Any]:
+        """Vector DB를 사용한 메모리 요약"""
+        try:
+            response = requests.post(
+                f"{self._weaviate_url}/v1/objects/{self._class_history}/search",
+                json={
+                    "query": f"user:{user_id}",
+                    "limit": 10
+                },
+                headers={"Content-Type": "application/json"},
+                timeout=10,
+            )
+            
+            if response.status_code == 200:
+                results = response.json()
+                return {
+                    "user_id": user_id,
+                    "total_memories": len(results),
+                    "recent_memories": results[-5:] if len(results) > 5 else results,
+                    "memory_types": {"vector_db": len(results)},
+                    "last_updated": results[-1].get("timestamp", "") if results else ""
+                }
+            else:
+                return {"user_id": user_id, "error": "Vector DB 조회 실패"}
+                
+        except Exception as e:
+            return {"user_id": user_id, "error": str(e)}
+
+    def is_mem0_available(self) -> bool:
+        """Mem0 사용 가능 여부 확인"""
+        return self._mem0_initialized and self._memory is not None 

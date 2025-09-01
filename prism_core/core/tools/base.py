@@ -11,7 +11,7 @@ class BaseTool(abc.ABC):
     like database queries, API calls, calculations, etc.
     """
     
-    def __init__(self, name: str, description: str, parameters_schema: Dict[str, Any]):
+    def __init__(self, name: str, description: str, parameters_schema: Dict[str, Any], tool_type: str):
         """
         Initialize a tool.
         
@@ -23,6 +23,7 @@ class BaseTool(abc.ABC):
         self.name = name
         self.description = description
         self.parameters_schema = parameters_schema
+        self.tool_type = tool_type
     
     @abc.abstractmethod
     async def execute(self, request: ToolRequest) -> ToolResponse:
@@ -59,7 +60,8 @@ class BaseTool(abc.ABC):
         return {
             "name": self.name,
             "description": self.description,
-            "parameters_schema": self.parameters_schema
+            "parameters_schema": self.parameters_schema,
+            "tool_type": self.tool_type
         }
     
     def __repr__(self) -> str:

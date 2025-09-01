@@ -160,6 +160,7 @@ class PrismLLMService(BaseLLMService):
     def register_agent(self, agent: Agent) -> bool:
         """
         PRISM-Core 서비스에 에이전트 등록
+        asdf
         """
         try:
             # Pre-check: if agent already exists on server, skip remote registration
@@ -172,6 +173,7 @@ class PrismLLMService(BaseLLMService):
                 pass
 
             url = f"{self.llm_service_url}/api/agents"
+            print(f"url: {url}")
             payload = {
                 "name": agent.name,
                 "description": agent.description,
@@ -183,6 +185,7 @@ class PrismLLMService(BaseLLMService):
                 # Treat duplicate as success
                 try:
                     detail = response.json()
+                    print(f"detail: {detail}")
                 except Exception:
                     detail = {"detail": response.text}
                 if isinstance(detail, dict) and ("already" in str(detail.get("detail", ""))):
@@ -222,7 +225,7 @@ class PrismLLMService(BaseLLMService):
                 "name": tool.name,
                 "description": tool.description,
                 "parameters_schema": tool.parameters_schema,
-                "tool_type": "custom"
+                "tool_type": tool.tool_type # api, calculation, function, database
             }
             response = self.session.post(url, json=payload)
             # Treat duplicate registration as success
@@ -322,122 +325,58 @@ class PrismLLMService(BaseLLMService):
     
     async def invoke_agent(self, agent, request: AgentInvokeRequest) -> AgentResponse:
         """
-        OpenAI-Compatible chat completions를 사용하여 에이전트 호출을 수행합니다.
-        - tools를 OpenAI 포맷으로 전달하여 모델이 함수 호출을 선택하도록 유도
-        - 모델이 tool_calls를 생성하면 로컬 도구를 실행해 결과를 messages에 추가한 뒤 재호출
-        - 최종 content를 반환
+        PRISM-Core API 서버를 통해 에이전트를 호출합니다.
         """
-        if self.simulate_delay:
-            time.sleep(random.uniform(0.3, 1.0))
-        
-        tools_used: List[str] = []
-        tool_results: List[Dict[str, Any]] = []
-        
-        # 초기 메시지 구성 (system + user)
-        messages: List[Dict[str, Any]] = [
-            {"role": "system", "content": agent.role_prompt},
-            {"role": "user", "content": request.prompt},
-        ]
-
-        tools_spec = self._map_tools_to_openai(request.tool_for_use) if (request.use_tools and agent.tools) else None
-        max_tool_calls = getattr(request, "max_tool_calls", 3) or 3
-
-        # Tool call 루프
-        for _ in range(max_tool_calls):
-            resp = self.client.chat.completions.create(
-                model=self.model_name,
-                messages=messages,
-                tools=tools_spec,
-                temperature=request.temperature,
-                max_tokens=request.max_tokens,
-                stop=request.stop,
-                extra_body=request.extra_body or None,
-            )
-            choice = resp.choices[0]
-            msg = choice.message.model_dump()
-
-            # tool calls 처리
-            tool_calls = msg.get("tool_calls") or []
-            if tool_calls:
-                messages.append({
-                    "role": "assistant",
-                    "content": msg.get("content"),
-                    "tool_calls": tool_calls,
-                })
-                for tc in tool_calls:
-                    fn = tc.get("function", {})
-                    fn_name = fn.get("name")
-                    fn_args_json = fn.get("arguments", "{}")
-                    try:
-                        fn_args = json.loads(fn_args_json)
-                    except Exception:
-                        fn_args = {}
-                    # 로컬 도구 실행
-                    tool = self.tool_registry.get_tool(fn_name)
-                    if tool:
-                        try:
-                            tr = ToolRequest(tool_name=fn_name, parameters=fn_args)
-                            tresp = await tool.execute(tr)
-                            tools_used.append(fn_name)
-                            tool_results.append({
-                                "tool": fn_name,
-                                "result": tresp.result,
-                                "message": tresp.message,
-                            })
-                            messages.append({
-                                "role": "tool",
-                                "content": json.dumps(tresp.result or {}),
-                                "tool_call_id": tc.get("id"),
-                            })
-                        except Exception as tool_err:
-                            messages.append({
-                                "role": "tool",
-                                "content": json.dumps({"error": str(tool_err)}),
-                                "tool_call_id": tc.get("id"),
-                            })
-                    else:
-                        messages.append({
-                            "role": "tool",
-                            "content": json.dumps({"error": f"tool '{fn_name}' not found"}),
-                            "tool_call_id": tc.get("id"),
-                        })
-                # 다음 루프에서 메시지/툴 결과를 반영하여 재호출
-                continue
+        try:
+            # agent가 Agent 객체인 경우 이름 추출, 문자열인 경우 그대로 사용
+            agent_name = agent.name if hasattr(agent, 'name') else str(agent)
             
-            # 최종 응답
-            final_content = msg.get("content") or ""
-            return AgentResponse(
-                text=final_content,
-                tools_used=tools_used,
-                tool_results=tool_results,
-                metadata={
-                    "agent_name": agent.name,
-                    "model": self.model_name,
-                    "tool_count": len(tools_used),
-                }
-            )
-
-        # 최대 툴 콜 초과 시 마지막 응답 시도
-        final_resp = self.client.chat.completions.create(
-            model=self.model_name,
-            messages=messages,
-            tools=tools_spec,
-            temperature=request.temperature,
-            max_tokens=request.max_tokens,
-            stop=request.stop,
-            extra_body=request.extra_body or None,
-        )
-        final_text = final_resp.choices[0].message.content or ""
-        return AgentResponse(
-            text=final_text,
-            tools_used=tools_used,
-            tool_results=tool_results,
-            metadata={
-                "agent_name": agent.name,
-                "model": self.model_name,
-                "tool_count": len(tools_used),
+            url = f"{self.llm_service_url}/api/agents/{agent_name}/invoke"
+            payload = {
+                "prompt": request.prompt,
+                "max_tokens": request.max_tokens,
+                "temperature": request.temperature,
+                "stop": request.stop,
+                "use_tools": request.use_tools,
+                "max_tool_calls": getattr(request, "max_tool_calls", 3),
+                "extra_body": request.extra_body,
+                "tool_for_use": request.tool_for_use
             }
-        )
+            
+            print(f"🔧 에이전트 호출: {url}")
+            print(f"   - 에이전트명: {agent_name}")
+            print(f"   - 프롬프트 길이: {len(request.prompt)}")
+            
+            response = self.session.post(url, json=payload)
+            response.raise_for_status()
+            
+            result = response.json()
+            
+            print(f"✅ 에이전트 '{agent_name}' 호출 완료")
+            
+            return AgentResponse(
+                text=result.get("text", ""),
+                tools_used=result.get("tools_used", []),
+                tool_results=result.get("tool_results", []),
+                metadata=result.get("metadata", {})
+            )
+            
+        except requests.RequestException as e:
+            print(f"❌ 에이전트 '{agent_name}' 호출 실패: {e}")
+            return AgentResponse(
+                text=f"에이전트 호출 실패: {str(e)}",
+                tools_used=[],
+                tool_results=[],
+                metadata={"error": str(e)}
+            )
+        except Exception as e:
+            print(f"❌ 에이전트 호출 중 예상치 못한 오류: {e}")
+            return AgentResponse(
+                text=f"에이전트 호출 실패: {str(e)}",
+                tools_used=[],
+                tool_results=[],
+                metadata={"error": str(e)}
+            )
     
     def _build_agent_prompt(self, agent, user_prompt: str, tool_results: List[Dict]) -> str:
         """(Deprecated) 문자열 프롬프트 방식 유지용 - 현재는 chat 기반 사용"""
