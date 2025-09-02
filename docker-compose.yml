@@ -10,11 +10,14 @@ services:
       - DATABASE_URL=postgresql://myuser:mysecretpassword@db:5432/mydatabase
       - VLLM_OPENAI_BASE_URL=http://vllm:8001/v1
       - OPENAI_API_KEY=EMPTY
+      - RELOAD=true
     ports:
       - "8000:8000"
     volumes:
       - /CACHE/MODELS:/CACHE/MODELS
       - ~/.cache/huggingface:/root/.cache/huggingface
+      # Hot reload volumes - mount source code directories and files
+      - .:/app
     deploy:
       resources:
         reservations:
@@ -22,7 +25,8 @@ services:
             - driver: nvidia
               count: all
               capabilities: [gpu]
-    command: ./run.sh
+    # Use uvicorn with reload flag for hot reload
+    command: sh -c "python authenticate_hf.py && python -m uvicorn main:app --host 0.0.0.0 --port 8000 --reload"
     networks:
       - prism-shared-network
 
