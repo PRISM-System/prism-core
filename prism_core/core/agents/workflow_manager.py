@@ -77,10 +77,13 @@ class WorkflowManager:
         }
         
         try:
+            import sys
             print(f"🔧 워크플로우 실행: {workflow_name}, 단계 수: {len(steps)}")
             for i, step in enumerate(steps):
                 print(f"🔧 단계 {i+1}/{len(steps)} 실행 중: {step.get('name', 'unknown') if step else 'None step'}")
+                print(f"🔧 [WF-DEBUG-1] About to execute step: {step}", file=sys.stderr, flush=True)
                 step_result = await self._execute_step(step, context, execution_id)
+                print(f"🔧 [WF-DEBUG-2] Step completed: {step.get('name', 'unknown')}", file=sys.stderr, flush=True)
                 execution_result["steps"].append(step_result)
                 
                 if not step_result["success"]:
@@ -110,7 +113,11 @@ class WorkflowManager:
     
     async def _execute_step(self, step: Dict[str, Any], context: Dict[str, Any], execution_id: str) -> Dict[str, Any]:
         """단계 실행"""
+        import sys
+        print(f"🔧 [STEP-EXEC-1] Starting step execution: {step.get('name', 'unknown') if step else 'None'}", file=sys.stderr, flush=True)
+        
         if step is None:
+            print("🔧 [STEP-EXEC-2] Step is None, returning error", file=sys.stderr, flush=True)
             return {
                 "step_name": "unknown",
                 "step_type": "unknown", 
@@ -129,6 +136,7 @@ class WorkflowManager:
         
         try:
             step_type = step.get("type")
+            print(f"🔧 [STEP-EXEC-3] Step type: {step_type}", file=sys.stderr, flush=True)
             
             if step_type == "tool_call":
                 step_result.update(await self._execute_tool_step(step, context))
@@ -166,14 +174,14 @@ class WorkflowManager:
         
         # Tool 타입에 따른 실행 방식 결정
         try:
-            if hasattr(tool, 'tool_type'):
-                # DynamicTool인 경우
+            if hasattr(tool, 'tool_type') and hasattr(tool, 'url'):
+                # DynamicTool인 경우 (url 속성을 가진 경우)
                 result = await self._execute_dynamic_tool(tool, parameters)
             elif tool_name == "database_tool":
                 # Database Tool인 경우
                 result = await self._execute_database_tool(tool, parameters)
             else:
-                # 일반 Tool인 경우
+                # 일반 Tool인 경우 (BaseTool 파생 클래스들)
                 result = await self._execute_generic_tool(tool, parameters)
             
             return result
@@ -396,8 +404,12 @@ class WorkflowManager:
             )
             
             # 원격 API를 통한 에이전트 호출
-            print(f"🔄 API를 통한 에이전트 호출...")
+            import sys
+            print(f"🔄 API를 통한 에이전트 호출...", file=sys.stderr, flush=True)
+            print(f"🔧 [AGENT-CALL-1] About to invoke agent: {agent_name}", file=sys.stderr, flush=True)
+            print(f"🔧 [AGENT-CALL-2] Prompt length: {len(prompt)}", file=sys.stderr, flush=True)
             response = await self.llm_service.invoke_agent(agent_name, request)
+            print(f"🔧 [AGENT-CALL-3] Agent response received, length: {len(response.text) if hasattr(response, 'text') else 'unknown'}", file=sys.stderr, flush=True)
             
             print(f"✅ 에이전트 '{agent_name}' 호출 완료 (응답 길이: {len(response.text)})")
             
