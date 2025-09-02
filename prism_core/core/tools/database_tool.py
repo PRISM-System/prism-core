@@ -52,7 +52,8 @@ class DatabaseTool(BaseTool):
         super().__init__(
             name="database_tool",
             description="Tool for querying industrial manufacturing database. Can execute SELECT queries, list tables, get table schemas, and retrieve table data with filtering.",
-            parameters_schema=parameters_schema
+            parameters_schema=parameters_schema,
+            tool_type="database"
         )
         
         self.db_service = db_service

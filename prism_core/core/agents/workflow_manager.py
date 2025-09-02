@@ -24,10 +24,20 @@ class WorkflowManager:
         self.workflows: Dict[str, Dict[str, Any]] = {}
         self.execution_history: List[Dict[str, Any]] = []
         self.tool_registry: Optional[ToolRegistry] = None
+        self.llm_service: Optional[Any] = None
+        self.agent_manager: Optional[Any] = None
     
     def set_tool_registry(self, tool_registry: ToolRegistry) -> None:
         """Tool Registry 설정"""
         self.tool_registry = tool_registry
+    
+    def set_llm_service(self, llm_service: Any) -> None:
+        """LLM 서비스 설정"""
+        self.llm_service = llm_service
+    
+    def set_agent_manager(self, agent_manager: Any) -> None:
+        """에이전트 매니저 설정"""
+        self.agent_manager = agent_manager
     
     def define_workflow(self, workflow_name: str, steps: List[Dict[str, Any]]) -> bool:
         """워크플로우 정의"""
@@ -46,10 +56,15 @@ class WorkflowManager:
     async def execute_workflow(self, workflow_name: str, context: Dict[str, Any]) -> Dict[str, Any]:
         """워크플로우 실행"""
         if workflow_name not in self.workflows:
-            return {"success": False, "error": "Workflow not found"}
+            return {"status": "failed", "error": "Workflow not found"}
         
         workflow = self.workflows[workflow_name]
         workflow["status"] = "running"
+        
+        # steps가 None인 경우 처리
+        steps = workflow.get("steps")
+        if steps is None:
+            return {"status": "failed", "error": "Workflow steps not defined"}
         
         execution_id = self._generate_execution_id()
         execution_result = {
@@ -62,8 +77,13 @@ class WorkflowManager:
         }
         
         try:
-            for i, step in enumerate(workflow["steps"]):
+            import sys
+            print(f"🔧 워크플로우 실행: {workflow_name}, 단계 수: {len(steps)}")
+            for i, step in enumerate(steps):
+                print(f"🔧 단계 {i+1}/{len(steps)} 실행 중: {step.get('name', 'unknown') if step else 'None step'}")
+                print(f"🔧 [WF-DEBUG-1] About to execute step: {step}", file=sys.stderr, flush=True)
                 step_result = await self._execute_step(step, context, execution_id)
+                print(f"🔧 [WF-DEBUG-2] Step completed: {step.get('name', 'unknown')}", file=sys.stderr, flush=True)
                 execution_result["steps"].append(step_result)
                 
                 if not step_result["success"]:
@@ -72,7 +92,9 @@ class WorkflowManager:
                     break
                 
                 # 다음 단계에 컨텍스트 전달
-                context.update(step_result.get("output", {}))
+                output = step_result.get("output", {})
+                if output is not None and isinstance(output, dict):
+                    context.update(output)
             
             if execution_result["status"] == "running":
                 execution_result["status"] = "completed"
@@ -91,6 +113,20 @@ class WorkflowManager:
     
     async def _execute_step(self, step: Dict[str, Any], context: Dict[str, Any], execution_id: str) -> Dict[str, Any]:
         """단계 실행"""
+        import sys
+        print(f"🔧 [STEP-EXEC-1] Starting step execution: {step.get('name', 'unknown') if step else 'None'}", file=sys.stderr, flush=True)
+        
+        if step is None:
+            print("🔧 [STEP-EXEC-2] Step is None, returning error", file=sys.stderr, flush=True)
+            return {
+                "step_name": "unknown",
+                "step_type": "unknown", 
+                "success": False,
+                "error": "Step is None",
+                "start_time": self._get_timestamp(),
+                "end_time": self._get_timestamp()
+            }
+            
         step_result = {
             "step_name": step.get("name", "unknown"),
             "step_type": step.get("type", "unknown"),
@@ -100,11 +136,12 @@ class WorkflowManager:
         
         try:
             step_type = step.get("type")
+            print(f"🔧 [STEP-EXEC-3] Step type: {step_type}", file=sys.stderr, flush=True)
             
             if step_type == "tool_call":
                 step_result.update(await self._execute_tool_step(step, context))
             elif step_type == "agent_call":
-                step_result.update(self._execute_agent_step(step, context))
+                step_result.update(await self._execute_agent_step(step, context))
             elif step_type == "condition":
                 step_result.update(self._execute_condition_step(step, context))
             else:
@@ -130,18 +167,21 @@ class WorkflowManager:
             return {"success": False, "error": f"Tool '{tool_name}' not found"}
         
         # 매개변수 준비 (컨텍스트에서 동적 값 추출)
-        parameters = self._prepare_parameters(step.get("parameters", {}), context)
+        parameters = step.get("parameters")
+        if parameters is None:
+            parameters = {}
+        parameters = self._prepare_parameters(parameters, context)
         
         # Tool 타입에 따른 실행 방식 결정
         try:
-            if hasattr(tool, 'tool_type'):
-                # DynamicTool인 경우
+            if hasattr(tool, 'tool_type') and hasattr(tool, 'url'):
+                # DynamicTool인 경우 (url 속성을 가진 경우)
                 result = await self._execute_dynamic_tool(tool, parameters)
             elif tool_name == "database_tool":
                 # Database Tool인 경우
                 result = await self._execute_database_tool(tool, parameters)
             else:
-                # 일반 Tool인 경우
+                # 일반 Tool인 경우 (BaseTool 파생 클래스들)
                 result = await self._execute_generic_tool(tool, parameters)
             
             return result
@@ -285,46 +325,19 @@ class WorkflowManager:
             return {"success": False, "error": f"API execution failed: {str(e)}"}
     
     async def _execute_calculation(self, tool, parameters: Dict[str, Any]) -> Dict[str, Any]:
-        """수학 계산 실행"""
+        """Calculation Tool 실행"""
         try:
-            import math
+            # CalculationTool의 execute 메서드 호출
+            from ..tools.schemas import ToolRequest, ToolResponse
             
-            expression = parameters.get("expression")
-            variables = parameters.get("variables", {})
+            request = ToolRequest(tool_name=tool.name, parameters=parameters)
+            response = await tool.execute(request)
             
-            if not expression:
-                return {"success": False, "error": "Expression not provided"}
-            
-            # 안전한 계산 환경
-            safe_namespace = {
-                "__builtins__": {},
-                "math": math,
-                "abs": abs, "min": min, "max": max, "sum": sum, "round": round,
-                **variables
-            }
-            
-            # 안전성 검사
-            allowed_chars = set("0123456789+-*/.() abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ_")
-            forbidden_keywords = ["import", "exec", "eval", "open", "file", "__"]
-            
-            if not set(expression).issubset(allowed_chars):
-                return {"success": False, "error": "Expression contains forbidden characters"}
-            
-            for keyword in forbidden_keywords:
-                if keyword in expression:
-                    return {"success": False, "error": f"Expression contains forbidden keyword: {keyword}"}
-            
-            result = eval(expression, safe_namespace)
-            
-            return {
-                "success": True,
-                "output": {
-                    "expression": expression,
-                    "result": result,
-                    "variables_used": variables
-                }
-            }
-            
+            if response.success:
+                return {"success": True, "output": response.result}
+            else:
+                return {"success": False, "error": response.error_message}
+                
         except Exception as e:
             return {"success": False, "error": f"Calculation failed: {str(e)}"}
     
@@ -334,7 +347,7 @@ class WorkflowManager:
             # DatabaseTool의 execute 메서드 호출
             from ..tools.schemas import ToolRequest, ToolResponse
             
-            request = ToolRequest(parameters=parameters)
+            request = ToolRequest(tool_name=tool.name, parameters=parameters)
             response = await tool.execute(request)
             
             if response.success:
@@ -351,7 +364,7 @@ class WorkflowManager:
             # Tool의 execute 메서드 호출
             from ..tools.schemas import ToolRequest, ToolResponse
             
-            request = ToolRequest(parameters=parameters)
+            request = ToolRequest(tool_name=tool.name, parameters=parameters)
             response = await tool.execute(request)
             
             if response.success:
@@ -362,20 +375,52 @@ class WorkflowManager:
         except Exception as e:
             return {"success": False, "error": f"Generic tool execution failed: {str(e)}"}
     
-    def _execute_agent_step(self, step: Dict[str, Any], context: Dict[str, Any]) -> Dict[str, Any]:
+    async def _execute_agent_step(self, step: Dict[str, Any], context: Dict[str, Any]) -> Dict[str, Any]:
         """에이전트 호출 단계 실행"""
         agent_name = step.get("agent_name")
         prompt_template = step.get("prompt_template", "")
         
+        # 디버그: 에이전트명 확인
+        print(f"🔧 워크플로우 에이전트 호출:")
+        print(f"   - 단계명: {step.get('name', 'unknown')}")
+        print(f"   - 에이전트명: {agent_name}")
+        print(f"   - 프롬프트 템플릿 길이: {len(prompt_template) if prompt_template else 0}")
+        
         # 프롬프트 템플릿에서 컨텍스트 값 치환
         prompt = self._render_template(prompt_template, context)
         
-        # 실제 구현에서는 Agent 호출
+        # LLM 서비스가 설정되어 있는지 확인
+        if not self.llm_service:
+            return {"success": False, "error": "LLM service not available"}
+        
         try:
-            result = {"success": True, "output": {"agent_response": "sample"}}
-            return result
+            # 에이전트 호출 요청 생성
+            from ..llm.schemas import AgentInvokeRequest
+            request = AgentInvokeRequest(
+                prompt=prompt,
+                max_tokens=1024,
+                temperature=0.7,
+                use_tools=False  # 에이전트 호출에서는 도구를 직접 사용하지 않음
+            )
+            
+            # 원격 API를 통한 에이전트 호출
+            import sys
+            print(f"🔄 API를 통한 에이전트 호출...", file=sys.stderr, flush=True)
+            print(f"🔧 [AGENT-CALL-1] About to invoke agent: {agent_name}", file=sys.stderr, flush=True)
+            print(f"🔧 [AGENT-CALL-2] Prompt length: {len(prompt)}", file=sys.stderr, flush=True)
+            response = await self.llm_service.invoke_agent(agent_name, request)
+            print(f"🔧 [AGENT-CALL-3] Agent response received, length: {len(response.text) if hasattr(response, 'text') else 'unknown'}", file=sys.stderr, flush=True)
+            
+            print(f"✅ 에이전트 '{agent_name}' 호출 완료 (응답 길이: {len(response.text)})")
+            
+            return {
+                "success": True,
+                "output": {"agent_response": response.text}
+            }
+            
         except Exception as e:
-            return {"success": False, "error": str(e)}
+            print(f"❌ 에이전트 '{agent_name}' 호출 실패: {str(e)}")
+            return {"success": False, "error": f"Agent execution failed: {str(e)}"}
     
     def _execute_condition_step(self, step: Dict[str, Any], context: Dict[str, Any]) -> Dict[str, Any]:
         """조건 단계 실행"""
@@ -393,6 +438,9 @@ class WorkflowManager:
     
     def _prepare_parameters(self, parameters: Dict[str, Any], context: Dict[str, Any]) -> Dict[str, Any]:
         """매개변수 준비 (컨텍스트 값 치환)"""
+        if parameters is None:
+            return {}
+            
         prepared_params = {}
         
         for key, value in parameters.items():
@@ -406,12 +454,36 @@ class WorkflowManager:
         return prepared_params
     
     def _render_template(self, template: str, context: Dict[str, Any]) -> str:
-        """템플릿 렌더링"""
+        """템플릿 렌더링 (중첩된 객체 접근 지원)"""
+        if template is None:
+            return ""
+            
         rendered = template
         
-        for key, value in context.items():
-            placeholder = f"{{{{{key}}}}}"
-            rendered = rendered.replace(placeholder, str(value))
+        # 중첩된 객체 접근을 위한 헬퍼 함수
+        def get_nested_value(obj, path):
+            """점 표기법을 사용하여 중첩된 객체에서 값을 가져옵니다."""
+            keys = path.split('.')
+            current = obj
+            for key in keys:
+                if isinstance(current, dict) and key in current:
+                    current = current[key]
+                elif isinstance(current, list) and key.isdigit():
+                    current = current[int(key)]
+                else:
+                    return None
+            return current
+        
+        # 템플릿 변수 치환
+        import re
+        pattern = r'\{\{([^}]+)\}\}'
+        
+        def replace_match(match):
+            var_path = match.group(1).strip()
+            value = get_nested_value(context, var_path)
+            return str(value) if value is not None else match.group(0)
+        
+        rendered = re.sub(pattern, replace_match, rendered)
         
         return rendered
     

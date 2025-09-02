@@ -28,7 +28,7 @@ class DynamicTool(BaseTool):
             tool_type: Type of tool ('api', 'calculation', 'custom')
             config: Additional configuration for the tool
         """
-        super().__init__(name, description, parameters_schema)
+        super().__init__(name, description, parameters_schema, tool_type)
         self.tool_type = tool_type
         self.config = config or {}
     

@@ -38,7 +38,8 @@ class ComplianceTool(BaseTool):
                  openai_api_key: Optional[str] = None,
                  model_name: Optional[str] = None,
                  client_id: str = "default",
-                 class_prefix: str = "Default"):
+                 class_prefix: str = "Default",
+                 tool_type: str = "api"):
         super().__init__(
             name="compliance_check",
             description="제안된 조치가 안전 규정 및 사내 규정을 준수하는지 검증합니다",
@@ -50,7 +51,8 @@ class ComplianceTool(BaseTool):
                     "user_id": {"type": "string", "description": "사용자 ID (선택사항)"}
                 },
                 "required": ["action"]
-            }
+            },
+            tool_type=tool_type
         )
         # 에이전트별 설정 또는 기본값 사용
         self._weaviate_url = weaviate_url or settings.WEAVIATE_URL
