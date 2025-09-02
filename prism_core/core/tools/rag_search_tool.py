@@ -27,7 +27,8 @@ class RAGSearchTool(BaseTool):
                  encoder_model: Optional[str] = None,
                  vector_dim: Optional[int] = None,
                  client_id: str = "default",
-                 class_prefix: str = "Default"):
+                 class_prefix: str = "Default",
+                 tool_type: str = "api"):
         super().__init__(
             name="rag_search",
             description="지식 베이스에서 관련 정보를 검색합니다",
@@ -44,7 +45,8 @@ class RAGSearchTool(BaseTool):
                     }
                 },
                 "required": ["query"]
-            }
+            },
+            tool_type=tool_type
         )
         # 에이전트별 설정 또는 기본값 사용
         self._weaviate_url = weaviate_url or settings.WEAVIATE_URL

@@ -5,6 +5,7 @@ import time
 import requests
 import json
 import os
+import socket
 from openai import OpenAI
 
 from .base import BaseLLMService
@@ -42,23 +43,38 @@ class PrismLLMService(BaseLLMService):
             openai_base_url: vLLM OpenAI-compatible 서버 base URL (예: http://host:8001/v1)
             api_key: OpenAI 호환 API 키 (기본은 EMPTY)
         """
+        import sys
+        print("🔧 [STEP 6-1] Starting PrismLLMService initialization...", file=sys.stderr, flush=True)
+        
         # 모델명 해석: 우선순위 model_name arg > env VLLM_MODEL > settings.model_name
         resolved_model = model_name or os.getenv("VLLM_MODEL") or settings.model_name
         self.model_name = resolved_model
+        print(f"🔧 [STEP 6-2] Model name resolved: {self.model_name}", file=sys.stderr, flush=True)
+        
         self.simulate_delay = simulate_delay
+        print("🔧 [STEP 6-3] Creating tool registry...", file=sys.stderr, flush=True)
         self.tool_registry = tool_registry or ToolRegistry()
+        print("🔧 [STEP 6-4] Tool registry created", file=sys.stderr, flush=True)
+        
         self.llm_service_url = llm_service_url.rstrip('/')
         self.agent_name = agent_name
+        print("🔧 [STEP 6-5] Creating requests session...", file=sys.stderr, flush=True)
         self.session = requests.Session()
-        self.session.timeout = 30
+        print("🔧 [STEP 6-6] Requests session created", file=sys.stderr, flush=True)
 
         # OpenAI-compatible vLLM 클라이언트 설정
+        print("🔧 [STEP 6-7] Setting up OpenAI client...", file=sys.stderr, flush=True)
         base_url = (openai_base_url or settings.VLLM_OPENAI_BASE_URL).rstrip('/')
         if not base_url.endswith("/v1"):
             base_url = f"{base_url}/v1"
+        print(f"🔧 [STEP 6-8] Base URL: {base_url}", file=sys.stderr, flush=True)
+        print(f"🔧 [STEP 6-9] API Key: {'***' if (api_key or settings.OPENAI_API_KEY) else 'None'}", file=sys.stderr, flush=True)
+        
         self.client = OpenAI(base_url=base_url, api_key=api_key or settings.OPENAI_API_KEY)
+        print("🔧 [STEP 6-10] OpenAI client created", file=sys.stderr, flush=True)
         
         # 제조업 도메인 지식 기반 응답 템플릿 (폴백용)
+        print("🔧 [STEP 6-11] Setting up response templates...", file=sys.stderr, flush=True)
         self.response_templates = {
             "pressure": [
                 "압력 이상이 감지되었습니다. 즉시 다음 조치를 수행하세요:\n1. 압력 센서 점검\n2. 밸브 상태 확인\n3. 배관 누출 검사\n4. 안전 프로토콜 실행",
@@ -76,6 +92,7 @@ class PrismLLMService(BaseLLMService):
                 "전체 시스템 상태가 양호합니다. 다음 점검 일정에 맞춰 예방 정비를 실시하시기 바랍니다."
             ]
         }
+        print("✅ [STEP 6-12] PrismLLMService initialization completed successfully!", file=sys.stderr, flush=True)
     
     def generate(self, request: LLMGenerationRequest) -> str:
         """
@@ -160,6 +177,7 @@ class PrismLLMService(BaseLLMService):
     def register_agent(self, agent: Agent) -> bool:
         """
         PRISM-Core 서비스에 에이전트 등록
+        asdf
         """
         try:
             # Pre-check: if agent already exists on server, skip remote registration
@@ -172,6 +190,7 @@ class PrismLLMService(BaseLLMService):
                 pass
 
             url = f"{self.llm_service_url}/api/agents"
+            print(f"url: {url}")
             payload = {
                 "name": agent.name,
                 "description": agent.description,
@@ -183,6 +202,7 @@ class PrismLLMService(BaseLLMService):
                 # Treat duplicate as success
                 try:
                     detail = response.json()
+                    print(f"detail: {detail}")
                 except Exception:
                     detail = {"detail": response.text}
                 if isinstance(detail, dict) and ("already" in str(detail.get("detail", ""))):
@@ -202,10 +222,14 @@ class PrismLLMService(BaseLLMService):
         """
         PRISM-Core 서비스에 도구 등록
         """
+        import sys
         try:
+            print(f"🔧 [TOOL-REG-1] Starting tool registration for '{tool.name}'", file=sys.stderr, flush=True)
             # Pre-check: if tool already exists on server, skip remote registration
             try:
+                print(f"🔧 [TOOL-REG-2] Checking existing tools via get_tools()", file=sys.stderr, flush=True)
                 existing = self.get_tools() or []
+                print(f"🔧 [TOOL-REG-3] Found {len(existing)} existing tools", file=sys.stderr, flush=True)
                 if any((t.get("name") == tool.name) for t in existing if isinstance(t, dict)):
                     print(f"ℹ️  도구 '{tool.name}'는 이미 서버에 등록되어 있습니다. 스킵합니다.")
                     try:
@@ -222,7 +246,7 @@ class PrismLLMService(BaseLLMService):
                 "name": tool.name,
                 "description": tool.description,
                 "parameters_schema": tool.parameters_schema,
-                "tool_type": "custom"
+                "tool_type": tool.tool_type # api, calculation, function, database
             }
             response = self.session.post(url, json=payload)
             # Treat duplicate registration as success
@@ -287,16 +311,21 @@ class PrismLLMService(BaseLLMService):
             return []
     
     def get_tools(self) -> List[Dict[str, Any]]:
+        import sys
         try:
             url = f"{self.llm_service_url}/api/tools"
-            response = self.session.get(url)
+            print(f"🔧 [GET-TOOLS-1] Requesting tools from: {url}", file=sys.stderr, flush=True)
+            response = self.session.get(url, timeout=10)
+            print(f"🔧 [GET-TOOLS-2] Response status: {response.status_code}", file=sys.stderr, flush=True)
             response.raise_for_status()
-            return response.json()
+            result = response.json()
+            print(f"🔧 [GET-TOOLS-3] Successfully retrieved {len(result)} tools", file=sys.stderr, flush=True)
+            return result
         except requests.RequestException as e:
-            print(f"❌ 도구 목록 조회 실패: {e}")
+            print(f"❌ 도구 목록 조회 실패: {e}", file=sys.stderr, flush=True)
             return []
         except Exception as e:
-            print(f"❌ 도구 목록 조회 중 예상치 못한 오류: {e}")
+            print(f"❌ 도구 목록 조회 중 예상치 못한 오류: {e}", file=sys.stderr, flush=True)
             return []
     
     def setup_complete_system(self, agents: List[Agent], tools: List[BaseTool]) -> bool:
@@ -322,122 +351,54 @@ class PrismLLMService(BaseLLMService):
     
     async def invoke_agent(self, agent, request: AgentInvokeRequest) -> AgentResponse:
         """
-        OpenAI-Compatible chat completions를 사용하여 에이전트 호출을 수행합니다.
-        - tools를 OpenAI 포맷으로 전달하여 모델이 함수 호출을 선택하도록 유도
-        - 모델이 tool_calls를 생성하면 로컬 도구를 실행해 결과를 messages에 추가한 뒤 재호출
-        - 최종 content를 반환
+        직접 vLLM을 통해 에이전트를 호출합니다 (무한 순환 방지).
         """
-        if self.simulate_delay:
-            time.sleep(random.uniform(0.3, 1.0))
-        
-        tools_used: List[str] = []
-        tool_results: List[Dict[str, Any]] = []
-        
-        # 초기 메시지 구성 (system + user)
-        messages: List[Dict[str, Any]] = [
-            {"role": "system", "content": agent.role_prompt},
-            {"role": "user", "content": request.prompt},
-        ]
-
-        tools_spec = self._map_tools_to_openai(request.tool_for_use) if (request.use_tools and agent.tools) else None
-        max_tool_calls = getattr(request, "max_tool_calls", 3) or 3
-
-        # Tool call 루프
-        for _ in range(max_tool_calls):
-            resp = self.client.chat.completions.create(
-                model=self.model_name,
-                messages=messages,
-                tools=tools_spec,
-                temperature=request.temperature,
-                max_tokens=request.max_tokens,
-                stop=request.stop,
-                extra_body=request.extra_body or None,
-            )
-            choice = resp.choices[0]
-            msg = choice.message.model_dump()
-
-            # tool calls 처리
-            tool_calls = msg.get("tool_calls") or []
-            if tool_calls:
-                messages.append({
-                    "role": "assistant",
-                    "content": msg.get("content"),
-                    "tool_calls": tool_calls,
-                })
-                for tc in tool_calls:
-                    fn = tc.get("function", {})
-                    fn_name = fn.get("name")
-                    fn_args_json = fn.get("arguments", "{}")
-                    try:
-                        fn_args = json.loads(fn_args_json)
-                    except Exception:
-                        fn_args = {}
-                    # 로컬 도구 실행
-                    tool = self.tool_registry.get_tool(fn_name)
-                    if tool:
-                        try:
-                            tr = ToolRequest(tool_name=fn_name, parameters=fn_args)
-                            tresp = await tool.execute(tr)
-                            tools_used.append(fn_name)
-                            tool_results.append({
-                                "tool": fn_name,
-                                "result": tresp.result,
-                                "message": tresp.message,
-                            })
-                            messages.append({
-                                "role": "tool",
-                                "content": json.dumps(tresp.result or {}),
-                                "tool_call_id": tc.get("id"),
-                            })
-                        except Exception as tool_err:
-                            messages.append({
-                                "role": "tool",
-                                "content": json.dumps({"error": str(tool_err)}),
-                                "tool_call_id": tc.get("id"),
-                            })
-                    else:
-                        messages.append({
-                            "role": "tool",
-                            "content": json.dumps({"error": f"tool '{fn_name}' not found"}),
-                            "tool_call_id": tc.get("id"),
-                        })
-                # 다음 루프에서 메시지/툴 결과를 반영하여 재호출
-                continue
+        import sys
+        try:
+            # agent가 Agent 객체인 경우 이름 추출, 문자열인 경우 그대로 사용
+            agent_name = agent.name if hasattr(agent, 'name') else str(agent)
+            print(f"🔧 [INVOKE-1] Starting direct vLLM agent invocation: {agent_name}", file=sys.stderr, flush=True)
             
-            # 최종 응답
-            final_content = msg.get("content") or ""
-            return AgentResponse(
-                text=final_content,
-                tools_used=tools_used,
-                tool_results=tool_results,
-                metadata={
-                    "agent_name": agent.name,
-                    "model": self.model_name,
-                    "tool_count": len(tools_used),
-                }
+            # 무한 순환을 방지하기 위해 직접 vLLM 호출
+            print(f"🔧 [INVOKE-2] Using direct vLLM call to avoid infinite recursion", file=sys.stderr, flush=True)
+            
+            print(f"🔧 [INVOKE-3] Calling direct vLLM via OpenAI client...", file=sys.stderr, flush=True)
+            # 직접 vLLM 호출 (무한 순환 방지)
+            completion = self.client.chat.completions.create(
+                model=self.model_name,
+                messages=[{"role": "user", "content": request.prompt}],
+                max_tokens=request.max_tokens,
+                temperature=request.temperature,
+                stop=request.stop
             )
-
-        # 최대 툴 콜 초과 시 마지막 응답 시도
-        final_resp = self.client.chat.completions.create(
-            model=self.model_name,
-            messages=messages,
-            tools=tools_spec,
-            temperature=request.temperature,
-            max_tokens=request.max_tokens,
-            stop=request.stop,
-            extra_body=request.extra_body or None,
-        )
-        final_text = final_resp.choices[0].message.content or ""
-        return AgentResponse(
-            text=final_text,
-            tools_used=tools_used,
-            tool_results=tool_results,
-            metadata={
-                "agent_name": agent.name,
-                "model": self.model_name,
-                "tool_count": len(tools_used),
-            }
-        )
+            response_text = completion.choices[0].message.content
+            print(f"🔧 [INVOKE-4] Direct vLLM response received", file=sys.stderr, flush=True)
+            
+            print(f"✅ 에이전트 '{agent_name}' 호출 완료 (응답 길이: {len(response_text)})")
+            
+            return AgentResponse(
+                text=response_text,
+                tools_used=[],
+                tool_results=[],
+                metadata={"agent_name": agent_name, "direct_vllm": True}
+            )
+            
+        except requests.RequestException as e:
+            print(f"❌ 에이전트 '{agent_name}' 호출 실패: {e}")
+            return AgentResponse(
+                text=f"에이전트 호출 실패: {str(e)}",
+                tools_used=[],
+                tool_results=[],
+                metadata={"error": str(e)}
+            )
+        except Exception as e:
+            print(f"❌ 에이전트 호출 중 예상치 못한 오류: {e}")
+            return AgentResponse(
+                text=f"에이전트 호출 실패: {str(e)}",
+                tools_used=[],
+                tool_results=[],
+                metadata={"error": str(e)}
+            )
     
     def _build_agent_prompt(self, agent, user_prompt: str, tool_results: List[Dict]) -> str:
         """(Deprecated) 문자열 프롬프트 방식 유지용 - 현재는 chat 기반 사용"""
