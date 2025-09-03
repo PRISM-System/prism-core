@@ -59,6 +59,6 @@ class AgentInvokeRequest(BaseModel):
     stop: Optional[List[str]] = Field(default=None, description="Stop sequences")
     use_tools: bool = Field(default=True, description="Whether to automatically use tools if relevant") 
     max_tool_calls: int = Field(default=3, description="Max number of tool call rounds for chat with tools")
-    extra_body: Optional[Dict[str, Any]] = Field(default=None, description="OpenAI-compatible extra options (e.g., repetition_penalty, chat_template_kwargs)")
+    extra_body: Optional[Dict[str, Any]] = Field(default={"chat_template_kwargs": {"enable_thinking": True}}, description="OpenAI-compatible extra options (e.g., repetition_penalty, chat_template_kwargs)")
     user_id: Optional[str] = Field(default=None, description="User ID for memory search and personalization") 
     tool_for_use: Optional[List[str]] = Field(default=None, description="List of tools to use at this request, all tools should be registered in the tool registry of the agent")

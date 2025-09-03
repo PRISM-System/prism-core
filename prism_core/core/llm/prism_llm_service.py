@@ -369,7 +369,8 @@ class PrismLLMService(BaseLLMService):
                 messages=[{"role": "user", "content": request.prompt}],
                 max_tokens=request.max_tokens,
                 temperature=request.temperature,
-                stop=request.stop
+                stop=request.stop,
+                extra_body=request.extra_body if request.extra_body else {"chat_template_kwargs": {"enable_thinking": False}}
             )
             response_text = completion.choices[0].message.content
             print(f"🔧 [INVOKE-4] Direct vLLM response received", file=sys.stderr, flush=True)
