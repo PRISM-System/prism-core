@@ -351,38 +351,27 @@ class PrismLLMService(BaseLLMService):
     
     async def invoke_agent(self, agent, request: AgentInvokeRequest) -> AgentResponse:
         """
-        직접 vLLM을 통해 에이전트를 호출합니다 (무한 순환 방지).
+        vLLM을 통해 에이전트를 호출하며 automatic function calling을 지원합니다.
         """
         import sys
+        import json
         try:
             # agent가 Agent 객체인 경우 이름 추출, 문자열인 경우 그대로 사용
             agent_name = agent.name if hasattr(agent, 'name') else str(agent)
-            print(f"🔧 [INVOKE-1] Starting direct vLLM agent invocation: {agent_name}", file=sys.stderr, flush=True)
+            print(f"🔧 [INVOKE-1] Starting agent invocation with function calling: {agent_name}", file=sys.stderr, flush=True)
             
-            # 무한 순환을 방지하기 위해 직접 vLLM 호출
-            print(f"🔧 [INVOKE-2] Using direct vLLM call to avoid infinite recursion", file=sys.stderr, flush=True)
+            # Agent 도구 목록 확인
+            agent_tools = getattr(agent, 'tools', []) if hasattr(agent, 'tools') else []
+            use_tools = request.use_tools and len(agent_tools) > 0
             
-            print(f"🔧 [INVOKE-3] Calling direct vLLM via OpenAI client...", file=sys.stderr, flush=True)
-            # 직접 vLLM 호출 (무한 순환 방지)
-            completion = self.client.chat.completions.create(
-                model=self.model_name,
-                messages=[{"role": "user", "content": request.prompt}],
-                max_tokens=request.max_tokens,
-                temperature=request.temperature,
-                stop=request.stop,
-                extra_body=request.extra_body if request.extra_body else {"chat_template_kwargs": {"enable_thinking": False}}
-            )
-            response_text = completion.choices[0].message.content
-            print(f"🔧 [INVOKE-4] Direct vLLM response received", file=sys.stderr, flush=True)
+            print(f"🔧 [INVOKE-2] Agent tools: {agent_tools}, Use tools: {use_tools}", file=sys.stderr, flush=True)
             
-            print(f"✅ 에이전트 '{agent_name}' 호출 완료 (응답 길이: {len(response_text)})")
-            
-            return AgentResponse(
-                text=response_text,
-                tools_used=[],
-                tool_results=[],
-                metadata={"agent_name": agent_name, "direct_vllm": True}
-            )
+            if use_tools:
+                # Function calling 지원 모드
+                return await self._invoke_agent_with_function_calling(agent, request)
+            else:
+                # 기본 모드 (도구 없음)
+                return await self._invoke_agent_basic(agent, request)
             
         except requests.RequestException as e:
             print(f"❌ 에이전트 '{agent_name}' 호출 실패: {e}")
@@ -400,6 +389,201 @@ class PrismLLMService(BaseLLMService):
                 tool_results=[],
                 metadata={"error": str(e)}
             )
+
+    async def _invoke_agent_basic(self, agent, request: AgentInvokeRequest) -> AgentResponse:
+        """기본 에이전트 호출 (도구 없음)"""
+        import sys
+        agent_name = agent.name if hasattr(agent, 'name') else str(agent)
+        print(f"🔧 [INVOKE-BASIC-1] Basic agent invocation: {agent_name}", file=sys.stderr, flush=True)
+        
+        # 직접 vLLM 호출 (무한 순환 방지)
+        completion = self.client.chat.completions.create(
+            model=self.model_name,
+            messages=[{"role": "user", "content": request.prompt}],
+            max_tokens=request.max_tokens,
+            temperature=request.temperature,
+            stop=request.stop,
+            extra_body=request.extra_body if request.extra_body else {"chat_template_kwargs": {"enable_thinking": False}}
+        )
+        response_text = completion.choices[0].message.content
+        print(f"🔧 [INVOKE-BASIC-2] Basic response received", file=sys.stderr, flush=True)
+        
+        return AgentResponse(
+            text=response_text,
+            tools_used=[],
+            tool_results=[],
+            metadata={"agent_name": agent_name, "mode": "basic"}
+        )
+
+    async def _invoke_agent_with_function_calling(self, agent, request: AgentInvokeRequest) -> AgentResponse:
+        """Function calling을 지원하는 에이전트 호출"""
+        import sys
+        import json
+        
+        agent_name = agent.name if hasattr(agent, 'name') else str(agent)
+        print(f"🔧 [INVOKE-FC-1] Function calling agent invocation: {agent_name}", file=sys.stderr, flush=True)
+        
+        # 에이전트의 도구 목록 가져오기
+        agent_tools = getattr(agent, 'tools', [])
+        available_tools = []
+        tools_used = []
+        tool_results = []
+        
+        # 도구 스키마 생성
+        for tool_name in agent_tools:
+            tool = self.tool_registry.get_tool(tool_name)
+            if tool:
+                tool_schema = {
+                    "type": "function",
+                    "function": {
+                        "name": tool_name,
+                        "description": tool.description,
+                        "parameters": tool.parameters_schema
+                    }
+                }
+                available_tools.append(tool_schema)
+        
+        print(f"🔧 [INVOKE-FC-2] Available tools: {len(available_tools)}", file=sys.stderr, flush=True)
+        
+        # 대화 메시지 준비
+        messages = [
+            {"role": "system", "content": getattr(agent, 'role_prompt', '')},
+            {"role": "user", "content": request.prompt}
+        ]
+        
+        # Function calling 루프
+        max_iterations = request.max_tool_calls
+        for iteration in range(max_iterations):
+            print(f"🔧 [INVOKE-FC-3-{iteration+1}] Function calling iteration {iteration+1}/{max_iterations}", file=sys.stderr, flush=True)
+            
+            # OpenAI 호출 (function calling 지원)
+            try:
+                completion = self.client.chat.completions.create(
+                    model=self.model_name,
+                    messages=messages,
+                    max_tokens=request.max_tokens,
+                    temperature=request.temperature,
+                    stop=request.stop,
+                    tools=available_tools if available_tools else None,
+                    tool_choice="auto" if available_tools else None,
+                    extra_body=request.extra_body if request.extra_body else {"chat_template_kwargs": {"enable_thinking": False}}
+                )
+                
+                response_message = completion.choices[0].message
+                print(f"🔧 [INVOKE-FC-4-{iteration+1}] Received response with tool calls: {bool(response_message.tool_calls)}", file=sys.stderr, flush=True)
+                
+                # 메시지를 대화에 추가
+                messages.append(response_message)
+                
+                # Tool calls가 있는지 확인
+                if response_message.tool_calls:
+                    print(f"🔧 [INVOKE-FC-5-{iteration+1}] Processing {len(response_message.tool_calls)} tool calls", file=sys.stderr, flush=True)
+                    
+                    # 각 tool call 실행
+                    for tool_call in response_message.tool_calls:
+                        tool_name = tool_call.function.name
+                        tool_args = json.loads(tool_call.function.arguments)
+                        
+                        print(f"🔧 [INVOKE-FC-6-{iteration+1}] Executing tool: {tool_name} with args: {tool_args}", file=sys.stderr, flush=True)
+                        
+                        # 도구 실행
+                        tool = self.tool_registry.get_tool(tool_name)
+                        if tool:
+                            try:
+                                from ..tools.schemas import ToolRequest
+                                tool_request = ToolRequest(tool_name=tool_name, parameters=tool_args)
+                                tool_response = await tool.execute(tool_request)
+                                
+                                tools_used.append(tool_name)
+                                tool_results.append({
+                                    "tool": tool_name,
+                                    "arguments": tool_args,
+                                    "result": tool_response.result if tool_response.success else None,
+                                    "error": tool_response.error_message if not tool_response.success else None,
+                                    "success": tool_response.success
+                                })
+                                
+                                # Tool result를 메시지에 추가
+                                tool_result_content = json.dumps(tool_response.result) if tool_response.success else f"Error: {tool_response.error_message}"
+                                messages.append({
+                                    "role": "tool",
+                                    "tool_call_id": tool_call.id,
+                                    "content": tool_result_content
+                                })
+                                
+                                print(f"✅ Tool '{tool_name}' executed successfully", file=sys.stderr, flush=True)
+                                
+                            except Exception as e:
+                                error_msg = f"Tool execution error: {str(e)}"
+                                tool_results.append({
+                                    "tool": tool_name,
+                                    "arguments": tool_args,
+                                    "result": None,
+                                    "error": error_msg,
+                                    "success": False
+                                })
+                                
+                                messages.append({
+                                    "role": "tool",
+                                    "tool_call_id": tool_call.id,
+                                    "content": error_msg
+                                })
+                                
+                                print(f"❌ Tool '{tool_name}' execution failed: {error_msg}", file=sys.stderr, flush=True)
+                        else:
+                            error_msg = f"Tool '{tool_name}' not found"
+                            messages.append({
+                                "role": "tool",
+                                "tool_call_id": tool_call.id,
+                                "content": error_msg
+                            })
+                            print(f"❌ {error_msg}", file=sys.stderr, flush=True)
+                    
+                    # 다음 반복으로 계속
+                    continue
+                else:
+                    # Tool calls가 없으면 완료
+                    final_response = response_message.content
+                    print(f"🔧 [INVOKE-FC-7] Function calling completed with final response", file=sys.stderr, flush=True)
+                    
+                    return AgentResponse(
+                        text=final_response,
+                        tools_used=list(set(tools_used)),  # 중복 제거
+                        tool_results=tool_results,
+                        metadata={
+                            "agent_name": agent_name,
+                            "mode": "function_calling",
+                            "iterations": iteration + 1,
+                            "tools_available": len(available_tools)
+                        }
+                    )
+                    
+            except Exception as e:
+                print(f"❌ Function calling iteration {iteration+1} failed: {str(e)}", file=sys.stderr, flush=True)
+                break
+        
+        # 최대 반복 횟수 도달 또는 오류 발생
+        print(f"🔧 [INVOKE-FC-8] Function calling completed (max iterations reached)", file=sys.stderr, flush=True)
+        
+        # 마지막 응답 가져오기
+        if messages and len(messages) > 2:
+            last_message = messages[-1]
+            final_text = last_message.get("content", "Function calling completed but no final response")
+        else:
+            final_text = "Function calling process completed"
+        
+        return AgentResponse(
+            text=final_text,
+            tools_used=list(set(tools_used)),
+            tool_results=tool_results,
+            metadata={
+                "agent_name": agent_name,
+                "mode": "function_calling",
+                "iterations": max_iterations,
+                "tools_available": len(available_tools),
+                "status": "max_iterations_reached"
+            }
+        )
     
     def _build_agent_prompt(self, agent, user_prompt: str, tool_results: List[Dict]) -> str:
         """(Deprecated) 문자열 프롬프트 방식 유지용 - 현재는 chat 기반 사용"""
