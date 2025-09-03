@@ -25,8 +25,8 @@ services:
             - driver: nvidia
               count: all
               capabilities: [gpu]
-    # Use uvicorn with reload flag for hot reload
-    command: sh -c "python authenticate_hf.py && python -m uvicorn main:app --host 0.0.0.0 --port 8000 --reload"
+    # Start script: seed DB then run API
+    command: sh -c "./start_llm_agent.sh"
     networks:
       - prism-shared-network
 
