@@ -398,9 +398,14 @@ class WorkflowManager:
             from ..llm.schemas import AgentInvokeRequest
             request = AgentInvokeRequest(
                 prompt=prompt,
-                max_tokens=1024,
-                temperature=0.7,
-                use_tools=False  # 에이전트 호출에서는 도구를 직접 사용하지 않음
+                max_tokens=context.get("max_tokens", 1024),
+                temperature=context.get("temperature", 0.7),
+                stop=context.get("stop", None),
+                use_tools=context.get("use_tools", False),
+                max_tool_calls=context.get("max_tool_calls", 3),
+                extra_body=context.get("extra_body", {"enable_thinking": False}),
+                user_id=context.get("user_id", None),
+                tool_for_use=context.get("tool_for_use", None),
             )
             
             # 원격 API를 통한 에이전트 호출
