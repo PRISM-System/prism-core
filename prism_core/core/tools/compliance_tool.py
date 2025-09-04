@@ -3,11 +3,12 @@ Compliance Tool
 
 안전 규정 및 법규 준수 여부를 검증하는 Tool입니다.
 LLM을 통한 지능형 규정 준수 분석을 제공합니다.
-PRISM Core의 공통 설정을 사용합니다.
+RAG Search Tool의 compliance 도메인을 활용합니다.
 """
 
 import requests
 import json
+import sys
 from typing import Dict, Any, List, Optional
 from .base import BaseTool
 from .schemas import ToolRequest, ToolResponse
@@ -27,7 +28,7 @@ class ComplianceTool(BaseTool):
     
     기능:
     - 제안된 조치의 안전 규정 준수 여부 검증
-    - 관련 법규 및 사내 규정 매칭
+    - 관련 법규 및 사내 규정 매칭 (RAG Search Tool의 compliance 도메인 활용)
     - LLM을 통한 지능형 준수 여부 판단
     - 준수 여부에 따른 권장사항 제공
     """
@@ -37,6 +38,8 @@ class ComplianceTool(BaseTool):
                  openai_base_url: Optional[str] = None,
                  openai_api_key: Optional[str] = None,
                  model_name: Optional[str] = None,
+                 encoder_model: Optional[str] = None,
+                 vector_dim: Optional[int] = None,
                  client_id: str = "default",
                  class_prefix: str = "Default",
                  tool_type: str = "api"):
@@ -48,7 +51,8 @@ class ComplianceTool(BaseTool):
                 "properties": {
                     "action": {"type": "string", "description": "검증할 조치 내용"},
                     "context": {"type": "string", "description": "조치의 맥락 정보"},
-                    "user_id": {"type": "string", "description": "사용자 ID (선택사항)"}
+                    "user_id": {"type": "string", "description": "사용자 ID (선택사항)"},
+                    "session_id": {"type": "string", "description": "세션 ID (선택사항)", "default": None}
                 },
                 "required": ["action"]
             },
@@ -59,10 +63,19 @@ class ComplianceTool(BaseTool):
         self._openai_base_url = openai_base_url or settings.VLLM_OPENAI_BASE_URL
         self._openai_api_key = openai_api_key or settings.OPENAI_API_KEY
         self._model_name = model_name or settings.DEFAULT_MODEL
+        self._encoder_model = encoder_model or settings.VECTOR_ENCODER_MODEL
+        self._vector_dim = vector_dim or settings.VECTOR_DIM
         self._client_id = client_id
         
-        # 에이전트별 클래스명 설정
-        self._class_compliance = f"{class_prefix}Compliance"
+        # RAG Search Tool 초기화 (compliance 도메인 전용)
+        from .rag_search_tool import RAGSearchTool
+        self._rag_tool = RAGSearchTool(
+            weaviate_url=self._weaviate_url,
+            encoder_model=self._encoder_model,
+            vector_dim=self._vector_dim,
+            client_id=self._client_id,
+            class_prefix=class_prefix
+        )
         
         # OpenAI 클라이언트 초기화
         self._openai_client = None
@@ -88,58 +101,74 @@ class ComplianceTool(BaseTool):
             action = params["action"]
             context = params.get("context", "")
             user_id = params.get("user_id", "")
+            session_id = params.get("session_id", "")
             
-            # 1. 관련 규정 검색
+            # 1. RAG Search Tool을 사용하여 compliance 도메인에서 관련 규정 검색
             compliance_docs = await self._search_compliance_rules(action, context)
+            
+            print(f"🔍 Compliance docs: {compliance_docs}", file=sys.stderr, flush=True)
             
             # 2. LLM을 통한 준수 여부 분석
             compliance_analysis = await self._analyze_compliance_with_llm(action, context, compliance_docs)
+            print(f"🔍 Compliance analysis: {compliance_analysis}", file=sys.stderr, flush=True)
             
-            # 3. 결과 반환
             return ToolResponse(
                 success=True,
-                data={
-                    "action": action,
-                    "compliance_checked": True,
-                    "compliance_status": compliance_analysis["status"],
-                    "related_rules": compliance_analysis["related_rules"],
-                    "recommendations": compliance_analysis["recommendations"],
-                    "risk_level": compliance_analysis["risk_level"],
-                    "reasoning": compliance_analysis["reasoning"],
-                    "domain": "compliance"
-                }
+                result=compliance_analysis
             )
                 
         except Exception as e:
             return ToolResponse(
                 success=False,
-                error=f"규정 준수 검증 실패: {str(e)}"
+                error_message=f"규정 준수 검증 실패: {str(e)}"
             )
 
     async def _search_compliance_rules(self, action: str, context: str) -> List[Dict[str, Any]]:
-        """관련 규정 검색"""
+        """RAG Search Tool을 사용하여 compliance 도메인에서 관련 규정 검색"""
         try:
-            # 직접 Weaviate API 호출
-            search_query = f"안전 규정 준수: {action} {context}"
+            # RAG Search Tool 요청 생성
+            from .schemas import ToolRequest as RAGToolRequest
             
-            response = requests.post(
-                f"{self._weaviate_url}/v1/objects/{self._class_compliance}/search",
-                json={
+            search_query = f"안전 규정 준수 검증: {action} {context}"
+            
+            rag_request = RAGToolRequest(
+                tool_name="rag_search",
+                parameters={
                     "query": search_query,
-                    "limit": 5
-                },
-                headers={"Content-Type": "application/json"},
-                timeout=10,
+                    "top_k": 5,
+                    "domain": "compliance"  # compliance 도메인만 검색
+                }
             )
             
-            if response.status_code == 200:
-                return response.json()
+            print(f"🔍 RAG Search Tool로 compliance 도메인 검색: {search_query}", file=sys.stderr, flush=True)
+            
+            # RAG Search Tool 실행
+            rag_response = await self._rag_tool.execute(rag_request)
+            print(f"🔍 RAG Search Tool 응답: {rag_response}", file=sys.stderr, flush=True)
+            
+            if rag_response.success:
+                results = rag_response.result
+                print(f"✅ RAG Search Tool에서 {len(results)}개 결과 반환", file=sys.stderr, flush=True)
+                
+                # 결과 포맷 변환 (LLM 분석에 적합하도록)
+                formatted_results = []
+                for result in results:
+                    props = result.get("properties", {})
+                    formatted_results.append({
+                        "title": props.get("title", ""),
+                        "content": props.get("content", ""),
+                        "metadata": props.get("metadata", "{}"),
+                        "certainty": result.get("certainty", 0.0),
+                        "class": result.get("class", "")
+                    })
+                
+                return formatted_results
             else:
-                print(f"⚠️  규정 검색 실패: {response.status_code}")
+                print(f"⚠️  RAG Search Tool 검색 실패: {rag_response.error}", file=sys.stderr, flush=True)
                 return []
                 
         except Exception as e:
-            print(f"⚠️  규정 검색 중 오류: {str(e)}")
+            print(f"⚠️  RAG Search Tool 사용 중 오류: {str(e)}", file=sys.stderr, flush=True)
             return []
 
     async def _analyze_compliance_with_llm(self, action: str, context: str, compliance_docs: List[Dict[str, Any]]) -> Dict[str, Any]:
@@ -152,7 +181,13 @@ class ComplianceTool(BaseTool):
             # 관련 규정 정보 구성
             rules_text = ""
             for doc in compliance_docs:
-                rules_text += f"- {doc.get('content', '')}\n"
+                title = doc.get("title", "")
+                content = doc.get("content", "")
+                class_name = doc.get("class", "")
+                
+                # KOSHA 데이터인지 확인하여 출처 표시
+                source_info = "KOSHA 안전규정" if "KOSHA" in class_name else "사내 안전규정"
+                rules_text += f"**[{source_info}] {title}**\n{content}\n\n"
             
             # LLM 프롬프트 구성
             prompt = f"""
@@ -167,13 +202,13 @@ class ComplianceTool(BaseTool):
 **관련 안전 규정:**
 {rules_text}
 
-다음 JSON 형식으로 응답해주세요:
+분석 결과를 다음 JSON 형식으로 제공해주세요:
 {{
     "status": "compliant|non_compliant|requires_review",
     "risk_level": "low|medium|high",
-    "related_rules": ["규정1", "규정2"],
-    "recommendations": ["권장사항1", "권장사항2"],
-    "reasoning": "분석 근거"
+    "related_rules": ["관련된 규정들의 제목"],
+    "recommendations": ["구체적인 권장사항들"],
+    "reasoning": "상세한 분석 근거"
 }}
 """
             
@@ -185,27 +220,94 @@ class ComplianceTool(BaseTool):
                     {"role": "user", "content": prompt}
                 ],
                 temperature=0.1,
-                max_tokens=1000
+                max_tokens=3000
             )
             
             # 응답 파싱
             result_text = response.choices[0].message.content
+            
+            # JSON 파싱 시도
             try:
-                result = json.loads(result_text)
-                return result
+                import json
+                import re
+                
+                # JSON 블록 추출
+                json_match = re.search(r'\{.*\}', result_text, re.DOTALL)
+                if json_match:
+                    json_str = json_match.group()
+                    parsed_result = json.loads(json_str)
+                    
+                    # 필수 필드 확인 및 기본값 설정
+                    return {
+                        "status": parsed_result.get("status", "requires_review"),
+                        "risk_level": parsed_result.get("risk_level", "medium"),
+                        "related_rules": parsed_result.get("related_rules", [doc.get("title", "") for doc in compliance_docs[:3]]),
+                        "recommendations": parsed_result.get("recommendations", [
+                            "안전 규정을 다시 한번 확인하세요",
+                            "필요시 안전 담당자와 상의하세요",
+                            "작업 허가서를 발급받으세요"
+                        ]),
+                        "reasoning": parsed_result.get("reasoning", result_text)
+                    }
+                else:
+                    # JSON 파싱 실패 시 텍스트 분석
+                    return self._parse_text_analysis(result_text, compliance_docs)
+                    
             except json.JSONDecodeError:
-                # JSON 파싱 실패 시 기본 분석 반환
-                return self._basic_compliance_analysis(action, context, compliance_docs)
+                # JSON 파싱 실패 시 텍스트 분석
+                return self._parse_text_analysis(result_text, compliance_docs)
                 
         except Exception as e:
-            print(f"⚠️  LLM 분석 실패: {str(e)}")
+            print(f"⚠️  LLM 분석 실패: {str(e)}", file=sys.stderr, flush=True)
             return self._basic_compliance_analysis(action, context, compliance_docs)
+
+    def _parse_text_analysis(self, result_text: str, compliance_docs: List[Dict[str, Any]]) -> Dict[str, Any]:
+        """텍스트 기반 분석 결과 파싱"""
+        lines = result_text.split('\n')
+        status = "requires_review"
+        risk_level = "medium"
+        related_rules = []
+        recommendations = []
+        reasoning = result_text
+        
+        for line in lines:
+            line = line.strip().lower()
+            if "status" in line or "준수" in line:
+                if "compliant" in line and "non_compliant" not in line:
+                    status = "compliant"
+                elif "non_compliant" in line:
+                    status = "non_compliant"
+            elif "risk" in line or "위험" in line:
+                if "low" in line or "낮음" in line:
+                    risk_level = "low"
+                elif "high" in line or "높음" in line:
+                    risk_level = "high"
+            elif "recommendation" in line or "권장" in line:
+                recommendations.append(line)
+        
+        # 관련 규정 추출
+        related_rules = [doc.get("title", "") for doc in compliance_docs[:3]]
+        
+        if not recommendations:
+            recommendations = [
+                "안전 규정을 다시 한번 확인하세요",
+                "필요시 안전 담당자와 상의하세요",
+                "작업 허가서를 발급받으세요"
+            ]
+        
+        return {
+            "status": status,
+            "risk_level": risk_level,
+            "related_rules": related_rules,
+            "recommendations": recommendations,
+            "reasoning": reasoning
+        }
 
     def _basic_compliance_analysis(self, action: str, context: str, compliance_docs: List[Dict[str, Any]]) -> Dict[str, Any]:
         """기본 키워드 기반 준수 여부 분석"""
         # 위험 키워드 체크
-        danger_keywords = ["위험", "폭발", "화재", "독성", "고압", "고온", "전기"]
-        safety_keywords = ["안전", "보호", "점검", "허가", "절차", "규정"]
+        danger_keywords = ["위험", "폭발", "화재", "독성", "고압", "고온", "전기", "화학물질", "밀폐공간", "고소작업"]
+        safety_keywords = ["안전", "보호", "점검", "허가", "절차", "규정", "교육", "장비", "검사"]
         
         action_lower = action.lower()
         context_lower = context.lower()
@@ -215,7 +317,7 @@ class ComplianceTool(BaseTool):
         safety_count = sum(1 for keyword in safety_keywords if keyword in action_lower or keyword in context_lower)
         
         # 상태 결정
-        if danger_count > safety_count:
+        if danger_count > safety_count and danger_count > 2:
             status = "non_compliant"
             risk_level = "high"
         elif safety_count > danger_count:
@@ -225,14 +327,23 @@ class ComplianceTool(BaseTool):
             status = "requires_review"
             risk_level = "medium"
         
+        # 관련 규정 추출
+        related_rules = []
+        for doc in compliance_docs[:3]:
+            title = doc.get("title", "규정")
+            if title:
+                related_rules.append(title)
+        
         return {
             "status": status,
             "risk_level": risk_level,
-            "related_rules": [doc.get("title", "규정") for doc in compliance_docs[:3]],
+            "related_rules": related_rules,
             "recommendations": [
                 "안전 규정을 다시 한번 확인하세요",
                 "필요시 안전 담당자와 상의하세요",
-                "작업 허가서를 발급받으세요"
+                "작업 허가서를 발급받아야 합니다",
+                "개인보호구 착용을 확인하세요",
+                "작업 전 위험성 평가를 실시하세요"
             ],
-            "reasoning": f"기본 키워드 분석 결과: 위험 키워드 {danger_count}개, 안전 키워드 {safety_count}개"
+            "reasoning": f"기본 키워드 분석 결과: 위험 키워드 {danger_count}개, 안전 키워드 {safety_count}개 검출. compliance 도메인에서 관련 규정 {len(compliance_docs)}개 확인됨."
         } 

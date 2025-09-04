@@ -37,7 +37,8 @@ class MemorySearchTool(BaseTool):
                  openai_base_url: Optional[str] = None,
                  openai_api_key: Optional[str] = None,
                  model_name: Optional[str] = None,
-                 embedder_model_name: Optional[str] = None,
+                 encoder_model: Optional[str] = None,
+                 vector_dim: Optional[int] = None,
                  client_id: str = "default",
                  class_prefix: str = "Default",
                  tool_type: str = "api"):
@@ -49,6 +50,7 @@ class MemorySearchTool(BaseTool):
                 "properties": {
                     "query": {"type": "string", "description": "검색할 쿼리"},
                     "user_id": {"type": "string", "description": "사용자 ID"},
+                    "session_id": {"type": "string", "description": "세션 ID (선택사항)", "default": None},
                     "top_k": {"type": "integer", "description": "반환할 기록 수", "default": 3},
                     "memory_type": {
                         "type": "string", 
@@ -72,7 +74,8 @@ class MemorySearchTool(BaseTool):
         self._openai_api_key = openai_api_key or settings.OPENAI_API_KEY
         self._client_id = client_id
         self._model_name = model_name or settings.VLLM_MODEL
-        self._embedder_model_name = embedder_model_name or settings.VECTOR_ENCODER_MODEL
+        self._encoder_model = encoder_model or settings.VECTOR_ENCODER_MODEL
+        self._vector_dim = vector_dim or settings.VECTOR_DIM
         
         # 디버그: 파라미터 설정 확인
         print(f"🔧 MemorySearchTool 초기화 파라미터:")
@@ -80,7 +83,8 @@ class MemorySearchTool(BaseTool):
         print(f"   - openai_base_url: {self._openai_base_url}")
         print(f"   - openai_api_key: {self._openai_api_key[:10]}..." if self._openai_api_key != "EMPTY" else "   - openai_api_key: EMPTY")
         print(f"   - model_name: {self._model_name}")
-        print(f"   - embedder_model_name: {self._embedder_model_name}")
+        print(f"   - encoder_model: {self._encoder_model}")
+        print(f"   - vector_dim: {self._vector_dim}")
         print(f"   - client_id: {self._client_id}")
         print(f"   - class_prefix: {class_prefix}")
         
@@ -130,7 +134,8 @@ class MemorySearchTool(BaseTool):
             print(f"   - Vector Store: Weaviate ({self._weaviate_url})")
             print(f"   - LLM: OpenAI-compatible ({self._openai_base_url})")
             print(f"   - Model: {self._model_name}")
-            print(f"   - Embedder: {self._embedder_model_name}")
+            print(f"   - Embedder: {self._encoder_model}")
+            print(f"   - Vector Dim: {self._vector_dim}")
             
         except Exception as e:
             import traceback
@@ -153,6 +158,7 @@ class MemorySearchTool(BaseTool):
             params = request.parameters
             query = params["query"]
             user_id = params["user_id"]
+            session_id = params.get("session_id", None)
             top_k = params.get("top_k", 3)
             memory_type = params.get("memory_type", "user")
             include_context = params.get("include_context", True)
@@ -170,16 +176,21 @@ class MemorySearchTool(BaseTool):
             else:
                 user_context = {}
             
+            response_data = {
+                "query": query,
+                "user_id": user_id,
+                "memories": memories,
+                "user_context": user_context,
+                "memory_type": memory_type,
+                "count": len(memories)
+            }
+            
+            if session_id:
+                response_data["session_id"] = session_id
+            
             return ToolResponse(
                 success=True,
-                data={
-                    "query": query,
-                    "user_id": user_id,
-                    "memories": memories,
-                    "user_context": user_context,
-                    "memory_type": memory_type,
-                    "count": len(memories)
-                }
+                data=response_data
             )
                 
         except Exception as e:

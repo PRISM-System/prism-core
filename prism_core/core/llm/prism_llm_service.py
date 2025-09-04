@@ -368,10 +368,20 @@ class PrismLLMService(BaseLLMService):
             
             if use_tools:
                 # Function calling 지원 모드
-                return await self._invoke_agent_with_function_calling(agent, request)
+                response = await self._invoke_agent_with_function_calling(agent, request)
             else:
                 # 기본 모드 (도구 없음)
-                return await self._invoke_agent_basic(agent, request)
+                response = await self._invoke_agent_basic(agent, request)
+            
+            # session_id를 응답에 포함
+            if request.session_id:
+                response.session_id = request.session_id
+                if response.metadata:
+                    response.metadata["session_id"] = request.session_id
+                else:
+                    response.metadata = {"session_id": request.session_id}
+            
+            return response
             
         except requests.RequestException as e:
             print(f"❌ 에이전트 '{agent_name}' 호출 실패: {e}")
@@ -379,7 +389,7 @@ class PrismLLMService(BaseLLMService):
                 text=f"에이전트 호출 실패: {str(e)}",
                 tools_used=[],
                 tool_results=[],
-                metadata={"error": str(e)}
+                metadata={"error": str(e), "session_id": getattr(request, 'session_id', None)}
             )
         except Exception as e:
             print(f"❌ 에이전트 호출 중 예상치 못한 오류: {e}")
@@ -387,7 +397,7 @@ class PrismLLMService(BaseLLMService):
                 text=f"에이전트 호출 실패: {str(e)}",
                 tools_used=[],
                 tool_results=[],
-                metadata={"error": str(e)}
+                metadata={"error": str(e), "session_id": getattr(request, 'session_id', None)}
             )
 
     async def _invoke_agent_basic(self, agent, request: AgentInvokeRequest) -> AgentResponse:
@@ -408,11 +418,15 @@ class PrismLLMService(BaseLLMService):
         response_text = completion.choices[0].message.content
         print(f"🔧 [INVOKE-BASIC-2] Basic response received", file=sys.stderr, flush=True)
         
+        metadata = {"agent_name": agent_name, "mode": "basic"}
+        if request.session_id:
+            metadata["session_id"] = request.session_id
+        
         return AgentResponse(
             text=response_text,
             tools_used=[],
             tool_results=[],
-            metadata={"agent_name": agent_name, "mode": "basic"}
+            metadata=metadata
         )
 
     async def _invoke_agent_with_function_calling(self, agent, request: AgentInvokeRequest) -> AgentResponse:
@@ -554,7 +568,8 @@ class PrismLLMService(BaseLLMService):
                             "agent_name": agent_name,
                             "mode": "function_calling",
                             "iterations": iteration + 1,
-                            "tools_available": len(available_tools)
+                            "tools_available": len(available_tools),
+                            "session_id": request.session_id
                         }
                     )
                     
@@ -581,7 +596,8 @@ class PrismLLMService(BaseLLMService):
                 "mode": "function_calling",
                 "iterations": max_iterations,
                 "tools_available": len(available_tools),
-                "status": "max_iterations_reached"
+                "status": "max_iterations_reached",
+                "session_id": request.session_id
             }
         )
     

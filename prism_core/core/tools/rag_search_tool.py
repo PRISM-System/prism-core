@@ -42,7 +42,8 @@ class RAGSearchTool(BaseTool):
                         "enum": ["research", "history", "compliance"], 
                         "description": "검색 도메인 (연구/기술문서, 사용자 수행내역, 안전 규정)", 
                         "default": "research"
-                    }
+                    },
+                    "session_id": {"type": "string", "description": "세션 ID (선택사항)", "default": None}
                 },
                 "required": ["query"]
             },
@@ -62,6 +63,15 @@ class RAGSearchTool(BaseTool):
         self._initialized = False
 
     async def execute(self, request: ToolRequest) -> ToolResponse:
+        """
+        class ToolResponse(BaseModel):
+    success: bool = Field(..., description="Whether the tool execution was successful")
+    result: Any = Field(None, description="Tool execution result")
+    message: Optional[str] = Field(None, description="General message about the execution")
+    count: Optional[int] = Field(None, description="Number of results")
+    error_message: Optional[str] = Field(None, description="Error message if execution failed")
+    execution_time_ms: Optional[float] = Field(None, description="Tool execution time in milliseconds")
+    """
         """도구를 실행합니다."""
         try:
             # 인덱스 초기화 확인
@@ -77,21 +87,19 @@ class RAGSearchTool(BaseTool):
             
             # 검색 실행
             results = await self._search_documents(query, class_name, top_k)
+            for result in results:  
+                result.pop("vectorWeights", None)
             
             return ToolResponse(
                 success=True,
-                data={
-                    "query": query,
-                    "domain": domain,
-                    "results": results,
-                    "count": len(results)
-                }
+                result=results,
+                count=len(results)
             )
             
         except Exception as e:
             return ToolResponse(
                 success=False,
-                error=f"RAG 검색 실패: {str(e)}"
+                error_message=f"RAG 검색 실패: {str(e)}"
             )
 
     def _get_class_name(self, domain: str) -> str:
