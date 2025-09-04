@@ -103,10 +103,16 @@ def create_llm_router(agent_registry: AgentRegistry, llm_service: BaseLLMService
             stop=request.stop,
         )
         generated_text = llm.generate(llm_request)
+        
+        metadata = {}
+        if request.session_id:
+            metadata["session_id"] = request.session_id
+        
         return AgentResponse(
             text=generated_text, 
             tools_used=[],
-            tool_results=[]
+            tool_results=[],
+            metadata=metadata
         )
 
     # Tool Management APIs

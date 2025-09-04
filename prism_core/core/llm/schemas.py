@@ -48,6 +48,7 @@ class AgentResponse(GenerationResponse):
     tools_used: List[str] = Field(default_factory=list, description="List of tools used in this response")
     tool_results: List[Dict[str, Any]] = Field(default_factory=list, description="Results from tool executions")
     metadata: Optional[Dict[str, Any]] = Field(default_factory=dict, description="Additional metadata about the response")
+    session_id: Optional[str] = Field(default=None, description="Session ID for tracking and orchestration")
 
 class AgentResponseCollection(BaseModel):
     responses: List[AgentResponse]
@@ -61,4 +62,5 @@ class AgentInvokeRequest(BaseModel):
     max_tool_calls: int = Field(default=3, description="Max number of tool call rounds for chat with tools")
     extra_body: Optional[Dict[str, Any]] = Field(default={"chat_template_kwargs": {"enable_thinking": True}}, description="OpenAI-compatible extra options (e.g., repetition_penalty, chat_template_kwargs)")
     user_id: Optional[str] = Field(default=None, description="User ID for memory search and personalization") 
+    session_id: Optional[str] = Field(default=None, description="Session ID for tracking and orchestration")
     tool_for_use: Optional[List[str]] = Field(default=None, description="List of tools to use at this request, all tools should be registered in the tool registry of the agent")

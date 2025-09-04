@@ -32,6 +32,8 @@ def create_compliance_tool(
     openai_base_url: str = None,
     openai_api_key: str = None,
     model_name: str = None,
+    encoder_model: str = None,
+    vector_dim: int = None,
     client_id: str = "default",
     class_prefix: str = "Default"
 ):
@@ -42,6 +44,8 @@ def create_compliance_tool(
         openai_base_url=openai_base_url,
         openai_api_key=openai_api_key,
         model_name=model_name,
+        encoder_model=encoder_model,
+        vector_dim=vector_dim,
         client_id=client_id,
         class_prefix=class_prefix,
         tool_type="api"
@@ -52,7 +56,8 @@ def create_memory_search_tool(
     openai_base_url: str = None,
     openai_api_key: str = None,
     model_name: str = None,
-    embedder_model_name: str = None,
+    encoder_model: str = None,
+    vector_dim: int = None,
     client_id: str = "default",
     class_prefix: str = "Default"
 ):
@@ -63,7 +68,8 @@ def create_memory_search_tool(
         openai_base_url=openai_base_url,
         openai_api_key=openai_api_key,
         model_name=model_name,
-        embedder_model_name=embedder_model_name,
+        encoder_model=encoder_model,
+        vector_dim=vector_dim,
         client_id=client_id,
         class_prefix=class_prefix,
         tool_type="api"
