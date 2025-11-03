@@ -44,7 +44,10 @@ tool_registry = ToolRegistry()
 # Agent 시스템 초기화 (Tool Registry와 연결)
 agent_registry = AgentRegistry(tool_registry)
 from prism_core.core.llm import PrismLLMService
-llm_service = PrismLLMService()
+# IMPORTANT: prism-core가 자신을 호출할 때 올바른 URL 사용
+import os
+self_url = os.getenv("SELF_URL", "http://prism-core-llm_agent-1:8000")
+llm_service = PrismLLMService(llm_service_url=self_url)
 
 # API 라우터들 생성 및 포함
 # LLM/Agent API (Tool Registry 포함)
