@@ -264,15 +264,16 @@ def create_llm_router(agent_registry: AgentRegistry, llm_service: BaseLLMService
 
     @router.post("/generate", response_model=GenerationResponse)
     async def generate(
-        request: GenerationRequest,
+        request: LLMGenerationRequest,
         llm: BaseLLMService = Depends(get_llm_service),
     ):
         """Generate text based on a prompt."""
         llm_request = LLMGenerationRequest(
-            prompt=request.prompt,
+            prompt=request.messages,
             max_tokens=request.max_tokens,
             temperature=request.temperature,
             stop=request.stop,
+            extra_body=request.extra_body
         )
         generated_text = llm.generate(llm_request)
         return GenerationResponse(text=generated_text)
