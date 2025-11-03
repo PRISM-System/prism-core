@@ -269,7 +269,7 @@ def create_llm_router(agent_registry: AgentRegistry, llm_service: BaseLLMService
     ):
         """Generate text based on a prompt."""
         llm_request = LLMGenerationRequest(
-            prompt=request.messages,
+            messages=request.messages,
             max_tokens=request.max_tokens,
             temperature=request.temperature,
             stop=request.stop,
