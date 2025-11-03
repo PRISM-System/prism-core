@@ -26,8 +26,8 @@ services:
               count: all
               capabilities: [gpu]
     # Use uvicorn with multiple workers for concurrent request handling
-    #command: sh -c "python authenticate_hf.py && python -m uvicorn main:app --host 0.0.0.0 --port 8000 --reload"
-    command: sh -c "python authenticate_hf.py && gunicorn main:app -k uvicorn.workers.UvicornWorker --threads 8 --workers 1 --bind 0.0.0.0:8000"
+    command: sh -c "python authenticate_hf.py && python -m uvicorn main:app --host 0.0.0.0 --port 8000 --reload"
+    # command: sh -c "python authenticate_hf.py && gunicorn main:app -k uvicorn.workers.UvicornWorker --threads 8 --workers 1 --bind 0.0.0.0:8000"
     networks:
       - prism-shared-network
 
@@ -41,8 +41,8 @@ services:
       --model ${VLLM_MODEL}
       --host ${VLLM_HOST:-0.0.0.0}
       --port ${VLLM_PORT:-8001}
-      --gpu-memory-utilization 0.6
-      ${VLLM_ARGS:- --enable-auto-tool-choice --tool-call-parser hermes}
+      --gpu-memory-utilization 0.7
+      ${VLLM_ARGS:- --enable-auto-tool-choice --tool-call-parser hermes --dtype bf16}
     ports:
       - "${VLLM_PORT:-8001}:${VLLM_PORT:-8001}"
     volumes:
@@ -52,7 +52,7 @@ services:
         reservations:
           devices:
             - driver: nvidia
-              count: all
+              count: 1
               capabilities: [gpu]
     healthcheck:
       test: ["CMD", "curl", "-f", "http://localhost:8001/health"]
