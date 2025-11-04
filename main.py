@@ -52,11 +52,11 @@ llm_service = PrismLLMService(llm_service_url=self_url)
 # API 라우터들 생성 및 포함
 # LLM/Agent API (Tool Registry 포함)
 llm_router = create_llm_router(agent_registry, llm_service, tool_registry)
-app.include_router(llm_router, prefix="/api")
+app.include_router(llm_router, prefix="/core/api")
 
 # Database API (완전히 분리됨)
 db_router = create_db_router(db_service)
-app.include_router(db_router, prefix="/api")
+app.include_router(db_router, prefix="/core/api")
 
 # # Vector-DB API (Weaviate 프록시)
 # vector_router = create_vector_db_router(settings.WEAVIATE_URL, settings.WEAVIATE_API_KEY)
