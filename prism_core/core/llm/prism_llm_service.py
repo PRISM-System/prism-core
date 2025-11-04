@@ -172,7 +172,7 @@ class PrismLLMService(BaseLLMService):
             except Exception:
                 pass
 
-            url = f"{self.llm_service_url}/api/agents"
+            url = f"{self.llm_service_url}/core/api/agents"
             print(f"url: {url}")
             payload = {
                 "name": agent.name,
@@ -263,7 +263,7 @@ class PrismLLMService(BaseLLMService):
         에이전트에 도구 할당
         """
         try:
-            url = f"{self.llm_service_url}/api/agents/{agent_name}/tools"
+            url = f"{self.llm_service_url}/core/api/agents/{agent_name}/tools"
             payload = {"agent_name": agent_name, "tool_names": tool_names}
             response = self.session.post(url, json=payload)
             response.raise_for_status()
@@ -278,7 +278,7 @@ class PrismLLMService(BaseLLMService):
     
     def get_agents(self) -> List[Dict[str, Any]]:
         try:
-            url = f"{self.llm_service_url}/api/agents"
+            url = f"{self.llm_service_url}/core/api/agents"
             response = self.session.get(url)
             response.raise_for_status()
             return response.json()
@@ -331,7 +331,7 @@ class PrismLLMService(BaseLLMService):
             # agent가 Agent 객체인 경우 이름 추출, 문자열인 경우 그대로 사용
             agent_name = agent.name if hasattr(agent, 'name') else str(agent)
             
-            url = f"{self.llm_service_url}/api/agents/{agent_name}/invoke"
+            url = f"{self.llm_service_url}/core/api/agents/{agent_name}/invoke"
             payload = {
                 "prompt": request.prompt,
                 "max_tokens": request.max_tokens,
