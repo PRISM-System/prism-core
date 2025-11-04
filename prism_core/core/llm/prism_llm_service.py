@@ -220,7 +220,7 @@ class PrismLLMService(BaseLLMService):
                 # If listing fails, proceed to try registering
                 pass
 
-            url = f"{self.llm_service_url}/api/tools"
+            url = f"{self.llm_service_url}/core/api/tools"
             payload = {
                 "name": tool.name,
                 "description": tool.description,
@@ -291,7 +291,7 @@ class PrismLLMService(BaseLLMService):
     
     def get_tools(self) -> List[Dict[str, Any]]:
         try:
-            url = f"{self.llm_service_url}/api/tools"
+            url = f"{self.llm_service_url}/core/api/tools"
             response = self.session.get(url)
             response.raise_for_status()
             return response.json()
