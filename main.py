@@ -44,16 +44,19 @@ tool_registry = ToolRegistry()
 # Agent 시스템 초기화 (Tool Registry와 연결)
 agent_registry = AgentRegistry(tool_registry)
 from prism_core.core.llm import PrismLLMService
-llm_service = PrismLLMService()
+# IMPORTANT: prism-core가 자신을 호출할 때 올바른 URL 사용
+import os
+self_url = os.getenv("SELF_URL", "http://prism-core-llm_agent-1:8000")
+llm_service = PrismLLMService(llm_service_url=self_url)
 
 # API 라우터들 생성 및 포함
 # LLM/Agent API (Tool Registry 포함)
 llm_router = create_llm_router(agent_registry, llm_service, tool_registry)
-app.include_router(llm_router, prefix="/api")
+app.include_router(llm_router, prefix="/core/api")
 
 # Database API (완전히 분리됨)
 db_router = create_db_router(db_service)
-app.include_router(db_router, prefix="/api")
+app.include_router(db_router, prefix="/core/api")
 
 # # Vector-DB API (Weaviate 프록시)
 # vector_router = create_vector_db_router(settings.WEAVIATE_URL, settings.WEAVIATE_API_KEY)

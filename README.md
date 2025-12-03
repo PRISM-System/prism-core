@@ -1,484 +1,117 @@
-# PRISM-Core
+# PRISM Core
 
-**Core LLM and Vector Database Services for Autonomous Manufacturing**
+산업 제조 도메인을 위한 멀티 에이전트/툴 오케스트레이션 서버입니다. FastAPI 기반 단일 서비스에서 다음을 제공합니다.
+- LLM/에이전트 호출 및 툴 레지스트리 (`/core/api/agents`, `/core/api/tools`)
+- Postgres 산업 데이터베이스 조회 API (`/core/api/db`)
+- vLLM(OpenAI 호환)와 연동되는 LLM 서비스 (`PrismLLMService`)
+- (선택) Weaviate 기반 Vector DB 유틸
 
-PRISM-Core is the foundational service layer that provides LLM (Large Language Model) capabilities and vector database management for the PRISM (PRocess Intelligence and Smart Manufacturing) ecosystem. It serves as the backbone for AI-powered manufacturing applications, offering scalable, production-ready services for natural language processing and semantic search.
+## 빠른 시작: Docker Compose
+`docker-compose.yml`이 기본 실행 방법입니다.
 
-## 🚀 Overview
+### 사전 준비
+- Docker 20.10+, Docker Compose 2.x
+- 외부 네트워크가 필요합니다: `docker network create prism-shared-network` (없으면 compose가 실패)
+- `.env` 파일 생성 (루트). 최소 예시는 아래와 같이 맞춰주세요.
+  ```env
+  HUGGING_FACE_TOKEN=your_token_here   # vLLM 이미지가 HF 토큰을 요구
+  VLLM_MODEL=Qwen/Qwen3-14B
+  VLLM_ARGS=--enable-auto-tool-choice --tool-call-parser hermes --dtype bf16
+  # 필요 시 덮어쓸 항목
+  # OPENAI_API_KEY=EMPTY
+  # VLLM_HOST=0.0.0.0
+  # VLLM_PORT=8001
+  # SELF_URL=http://prism-core-llm_agent-1:8000  # 내부 호출용, 기본값은 main.py에서 지정
+  ```
 
-PRISM-Core provides essential AI services that enable intelligent manufacturing applications:
-
-- **LLM Service**: High-performance language model inference with vLLM
-- **Vector Database**: Weaviate-based semantic search and document management
-- **Tool Framework**: Extensible tool system for AI agents
-- **API Gateway**: RESTful APIs for seamless integration
-
-### Key Features
-
-- **High-Performance LLM Inference**: Optimized language model serving with vLLM
-- **Semantic Search**: Advanced vector search capabilities with Weaviate
-- **Automatic Embedding Management**: Self-healing vector embeddings
-- **Extensible Tool System**: Plugin-based tool architecture
-- **Production-Ready APIs**: Scalable REST API endpoints
-- **Docker Integration**: Containerized deployment for easy scaling
-
-## 🏗️ Architecture
-
-PRISM-Core follows a modular architecture where each agent manages its own infrastructure:
-
-```
-┌─────────────────┐    ┌─────────────────┐    ┌─────────────────┐
-│   PRISM-Core    │    │   PRISM-Orch    │    │   Other Agents  │
-│   (Core Code)   │    │   (Agent)       │    │   (Agents)      │
-│                 │    │                 │    │                 │
-│ ┌─────────────┐ │    │ ┌─────────────┐ │    │ ┌─────────────┐ │
-│ │Tool System  │ │    │ │Orchestration│ │    │ │Agent Logic  │ │
-│ └─────────────┘ │    │ │Logic        │ │    │ └─────────────┘ │
-│ ┌─────────────┐ │    │ └─────────────┘ │    │ ┌─────────────┐ │
-│ │Agent Mgmt   │ │    │ ┌─────────────┐ │    │ │Weaviate     │ │
-│ │System       │ │    │ │Weaviate     │ │    │ │Instance     │ │
-│ └─────────────┘ │    │ │Instance     │ │    │ └─────────────┘ │
-│ ┌─────────────┐ │    │ └─────────────┘ │    │ ┌─────────────┐ │
-│ │LLM Service  │ │    │ ┌─────────────┐ │    │ │vLLM         │ │
-│ │(vLLM)       │ │    │ │vLLM         │ │    │ │Instance     │ │
-│ └─────────────┘ │    │ │Instance     │ │    │ └─────────────┘ │
-└─────────────────┘    │ └─────────────┘ │    └─────────────────┘
-                       └─────────────────┘
-```
-
-### Architecture Principles:
-
-1. **PRISM-Core**: Provides reusable code, tools, and APIs
-2. **Each Agent**: Manages its own infrastructure (Weaviate, vLLM, etc.)
-3. **Separation of Concerns**: Core provides tools, agents handle execution
-4. **Modularity**: Each agent can have different configurations and data
-
-## 🔧 Agent Management System
-
-PRISM-Core provides comprehensive agent management capabilities:
-
-### Agent Manager
-
-The `AgentManager` handles agent lifecycle and management:
-
-```python
-from prism_core.core.agents import AgentManager, ToolRegistry
-
-# Initialize agent manager
-agent_manager = AgentManager()
-agent_manager.set_tool_registry(tool_registry)
-
-# Register agents
-agent = Agent(
-    name="research_agent",
-    description="Research and analysis agent",
-    tools=["rag_search", "compliance_check"]
-)
-agent_manager.register_agent(agent)
-
-# Assign tools to agents
-agent_manager.assign_tools_to_agent("research_agent", ["rag_search", "memory_search"])
-
-# Validate agent tools
-validation = agent_manager.validate_agent_tools("research_agent")
-print(validation)  # {"valid": True, "valid_tools": [...], "invalid_tools": []}
-```
-
-### Workflow Manager
-
-The `WorkflowManager` handles orchestration workflows:
-
-```python
-from prism_core.core.agents import WorkflowManager
-
-# Initialize workflow manager
-workflow_manager = WorkflowManager()
-workflow_manager.set_tool_registry(tool_registry)
-
-# Define workflow steps
-workflow_steps = [
-    {
-        "name": "search_documents",
-        "type": "tool_call",
-        "tool_name": "rag_search",
-        "parameters": {"query": "{{user_query}}"}
-    },
-    {
-        "name": "check_compliance",
-        "type": "tool_call", 
-        "tool_name": "compliance_check",
-        "parameters": {"content": "{{search_documents.output}}"}
-    }
-]
-
-# Define and execute workflow
-workflow_manager.define_workflow("research_workflow", workflow_steps)
-result = workflow_manager.execute_workflow("research_workflow", {"user_query": "AI safety"})
-```
-
-## 🔧 Agent-Specific Vector DB Setup
-
-PRISM-Core provides tools for building vector databases, but each agent should set up their own Weaviate instance:
-
-### 1. Agent Weaviate Setup
-
+### 실행
 ```bash
-# Agent's docker-compose.yml
-version: '3.8'
-services:
-  weaviate:
-    image: semitechnologies/weaviate:1.21.3
-    ports:
-      - "18080:8080"
-    environment:
-      QUERY_DEFAULTS_LIMIT: 25
-      AUTHENTICATION_ANONYMOUS_ACCESS_ENABLED: 'true'
-      PERSISTENCE_DATA_PATH: '/var/lib/weaviate'
-      DEFAULT_VECTORIZER_MODULE: 'text2vec-transformers'
-      ENABLE_MODULES: 'text2vec-transformers'
-      CLUSTER_HOSTNAME: 'node1'
-    volumes:
-      - weaviate_data:/var/lib/weaviate
+docker compose up -d --build
+# 포트: core API 8000, vLLM(OpenAI 호환) 8001, Postgres 5432
 ```
 
-### 2. Agent Tool Configuration
+### 확인
+- 헬스: `curl http://localhost:8000/` → `{"message":"Welcome to PRISM Core","version":"0.1.0"}`
+- OpenAPI 문서: `http://localhost:8000/docs`
+- DB 상태: `curl http://localhost:8000/core/api/db`
 
-```python
-# Agent's tool setup
-from prism_core.core.tools import (
-    create_rag_search_tool,
-    create_compliance_tool,
-    create_memory_search_tool
-)
-
-# Agent-specific Weaviate configuration
-weaviate_url = "http://localhost:18080"
-encoder_model = "sentence-transformers/all-MiniLM-L6-v2"
-openai_base_url = "http://localhost:8001/v1"
-
-# Create tools with agent-specific settings
-rag_tool = create_rag_search_tool(
-    weaviate_url=weaviate_url,
-    encoder_model=encoder_model,
-    client_id="agent_orch",
-    class_prefix="Orch"  # Weaviate 클래스명: OrchResearch, OrchHistory, OrchCompliance
-)
-
-compliance_tool = create_compliance_tool(
-    weaviate_url=weaviate_url,
-    openai_base_url=openai_base_url,
-    client_id="agent_orch",
-    class_prefix="Orch"  # Weaviate 클래스명: OrchCompliance
-)
-
-memory_tool = create_memory_search_tool(
-    weaviate_url=weaviate_url,
-    openai_base_url=openai_base_url,
-    client_id="agent_orch",
-    class_prefix="Orch"  # Weaviate 클래스명: OrchHistory
-)
-```
-
-### 3. Tool Registration
-
-```python
-# Register tools with agent's tool registry
-tool_registry = ToolRegistry()
-tool_registry.register_tool(rag_tool)
-tool_registry.register_tool(compliance_tool)
-tool_registry.register_tool(memory_tool)
-```
-
-## 🛠️ System Requirements
-
-- **Docker**: 20.10+
-- **Docker Compose**: 2.0+
-- **System Resources**:
-  - **CPU**: 8+ cores (for LLM inference)
-  - **RAM**: 16GB+ (minimum), 32GB+ (recommended)
-  - **Storage**: 50GB+ SSD
-  - **GPU**: NVIDIA GPU with 8GB+ VRAM (optional, for acceleration)
-
-## 📦 Installation
-
-### Quick Start with Docker
-
-1. **Clone the repository**
-   ```bash
-   git clone https://github.com/PRISM-System/prism-core.git
-   cd prism-core
-   ```
-
-2. **Configure environment**
-   ```bash
-   cp .env.example .env
-   # Edit .env with your configuration
-   ```
-
-3. **Start services**
-   ```bash
-   docker-compose up -d
-   ```
-
-4. **Verify installation**
-   ```bash
-   curl http://localhost:8000/
-   # Should return: {"message": "Welcome to PRISM Core", "version": "0.1.0"}
-   ```
-
-### Manual Installation
-
-1. **Install dependencies**
-   ```bash
-   pip install -r requirements.txt
-   ```
-
-2. **Set up Weaviate**
-   ```bash
-   # Start Weaviate
-   docker run -d \
-     --name weaviate \
-     -p 8080:8080 \
-     -e QUERY_DEFAULTS_LIMIT=25 \
-     -e AUTHENTICATION_ANONYMOUS_ACCESS_ENABLED=true \
-     -e PERSISTENCE_DATA_PATH='/var/lib/weaviate' \
-     -e DEFAULT_VECTORIZER_MODULE='text2vec-transformers' \
-     -e ENABLE_MODULES='text2vec-transformers' \
-     -e TRANSFORMERS_INFERENCE_API='http://t2v-transformers:8080' \
-     semitechnologies/weaviate:1.25.8
-   ```
-
-3. **Start the application**
-   ```bash
-   python main.py
-   ```
-
-## 🚀 Usage
-
-### API Endpoints
-
-#### Vector Database API
-
+### 정지/정리
 ```bash
-# Create an index
-curl -X POST "http://localhost:8000/api/vector-db/indices" \
-  -H "Content-Type: application/json" \
-  -d '{
-    "class_name": "Document",
-    "description": "Document storage",
-    "vector_dimension": 384,
-    "encoder_model": "sentence-transformers/all-MiniLM-L6-v2"
-  }'
-
-# Add documents
-curl -X POST "http://localhost:8000/api/vector-db/documents/Document/batch" \
-  -H "Content-Type: application/json" \
-  -d '[
-    {
-      "title": "Sample Document",
-      "content": "This is a sample document for testing.",
-      "metadata": {"source": "test"}
-    }
-  ]'
-
-# Search documents
-curl -X POST "http://localhost:8000/api/vector-db/search/Document" \
-  -H "Content-Type: application/json" \
-  -d '{
-    "query": "sample document",
-    "limit": 5
-  }'
+docker compose down        # 컨테이너 종료
+docker compose down -v     # Postgres 데이터 볼륨까지 삭제
 ```
 
-#### LLM Service API
+## 서비스 구성 (docker-compose)
+| 서비스 | 역할 | 포트 | 비고 |
+| --- | --- | --- | --- |
+| llm_agent | FastAPI 앱 + 에이전트/툴/DB API, vLLM 클라이언트 | 8000 | 코드 볼륨 마운트, reload 지원 |
+| vllm | OpenAI 호환 vLLM 서버 | 8001 | GPU 지원 이미지 사용 |
+| db | Postgres 15 | 5432 | 볼륨 `postgres_data` 영구화 |
 
+## 주요 API
+- 에이전트/툴: `/core/api/agents`, `/core/api/tools`
+- LLM 호출: `/core/api/generate`
+- 에이전트 호출: `/core/api/agents/{agent_name}/invoke`
+- DB: `/core/api/db`, `/core/api/db/tables`, `/core/api/db/tables/{table}/schema`, `/core/api/db/query`
+- Vector DB(Weaviate 프록시): `/core/api/vector-db` (현재 기본 라우터는 주석 처리되어 있으며 필요 시 main.py에서 포함)
+
+### 예제 요청
+- 테이블 목록
+  ```bash
+  curl http://localhost:8000/core/api/db/tables
+  ```
+- 에이전트 등록
+  ```bash
+  curl -X POST http://localhost:8000/core/api/agents \
+    -H "Content-Type: application/json" \
+    -d '{
+      "name": "demo_agent",
+      "description": "Demo agent",
+      "role_prompt": "You are a helpful manufacturing analyst.",
+      "tools": []
+    }'
+  ```
+- 에이전트 호출
+  ```bash
+  curl -X POST http://localhost:8000/core/api/agents/demo_agent/invoke \
+    -H "Content-Type: application/json" \
+    -d '{"prompt": "공정 상태를 요약해줘"}'
+  ```
+- 툴 실행(등록된 툴 이름 필요)
+  ```bash
+  curl -X POST http://localhost:8000/core/api/tools/execute \
+    -H "Content-Type: application/json" \
+    -d '{"tool_name": "database_tool", "parameters": {"action": "list_tables"}}'
+  ```
+
+## 설정
+`prism_core/core/config.py`의 기본값을 환경 변수로 덮어쓸 수 있습니다.
+- 데이터베이스: `DATABASE_URL`, `POSTGRES_USER`, `POSTGRES_PASSWORD`, `POSTGRES_DB`
+- LLM/vLLM: `VLLM_MODEL`, `VLLM_ARGS`, `VLLM_OPENAI_BASE_URL`, `OPENAI_API_KEY`
+- Hugging Face: `HUGGING_FACE_TOKEN`
+- 내부 호출 베이스 URL: `SELF_URL` (main.py에서 PrismLLMService 초기화 시 사용)
+
+## 데이터 및 스크립트
+- 샘플 산업 데이터: `Industrial_DB_sample/*.csv`
+- 초기화/검증 스크립트: `scripts/init_db.py`, `scripts/verify_db.py`
+- 데모: `tool_demo.py`, `vector_db_demo.py`
+
+## 개발 모드 (로컬 실행)
 ```bash
-# Text generation
-curl -X POST "http://localhost:8001/v1/chat/completions" \
-  -H "Content-Type: application/json" \
-  -d '{
-    "model": "Qwen/Qwen3-0.6B",
-    "messages": [
-      {"role": "user", "content": "Hello, how are you?"}
-    ]
-  }'
+pip install -r requirements.txt
+python -m uvicorn main:app --reload --host 0.0.0.0 --port 8000
 ```
+- 로컬 Postgres를 사용하려면 `DATABASE_URL`을 환경 변수로 지정하세요.
+- Vector DB 라우터를 쓰려면 `main.py`의 `create_vector_db_router` 부분을 주석 해제합니다.
 
-### Python Client
-
-```python
-import requests
-
-# Vector DB operations
-def search_documents(query: str, class_name: str = "Document"):
-    response = requests.post(
-        f"http://localhost:8000/api/vector-db/search/{class_name}",
-        json={"query": query, "limit": 5}
-    )
-    return response.json()
-
-# LLM operations
-def generate_text(prompt: str, model: str = "Qwen/Qwen3-0.6B"):
-    response = requests.post(
-        "http://localhost:8001/v1/chat/completions",
-        json={
-            "model": model,
-            "messages": [{"role": "user", "content": prompt}]
-        }
-    )
-    return response.json()
-```
-
-## 🧪 Testing
-
-### Run the test suite
-
+## 테스트
 ```bash
-# Comprehensive testing
-python -m pytest tests/ -v
-
-# Specific test categories
-python -m pytest tests/test_vector_db.py -v
-python -m pytest tests/test_llm_service.py -v
-python -m pytest tests/test_api.py -v
+pytest -q
 ```
+- 단위 예제: `tests/test_api.py`, `test_db.py`, `test_client.py`
 
-### Manual testing
+## 참고 문서
+- `client.md`: 클라이언트 연동 가이드
+- `server.md`: 서버 설정 및 배포 가이드
+- `PROJECT_STRUCTURE.md`: 디렉터리 구조 설명
 
-```bash
-# Test vector database
-python test_db.py
-
-# Test client functionality
-python test_client.py
-
-# Test vector database demo
-python vector_db_demo.py
-```
-
-## 📚 Documentation
-
-- **[Server Guide](server.md)**: Server-side setup and configuration
-- **[Client Guide](client.md)**: Client integration guidelines
-- **[API Reference](docs/api.md)**: Detailed API documentation
-
-## 🔧 Development
-
-### Project Structure
-
-```
-prism-core/
-├── core/
-│   ├── llm/              # LLM service components
-│   ├── vector_db/        # Vector database components
-│   ├── tools/            # Tool framework
-│   └── data/             # Data management
-├── tests/                # Test files
-├── docs/                 # Documentation
-├── docker/               # Docker configurations
-├── main.py              # FastAPI application
-└── requirements.txt     # Dependencies
-```
-
-### Adding New Tools
-
-1. Create a new tool class in `core/tools/`
-2. Inherit from `BaseTool`
-3. Implement required methods
-4. Register in the tool registry
-
-### Adding New Vector DB Features
-
-1. Extend `WeaviateClient` in `core/vector_db/client.py`
-2. Add corresponding API endpoints in `core/vector_db/api.py`
-3. Update schemas in `core/vector_db/schemas.py`
-
-## 🚀 Deployment
-
-### Production Deployment
-
-```bash
-# Build production images
-docker-compose -f docker-compose.prod.yml build
-
-# Deploy with proper environment variables
-docker-compose -f docker-compose.prod.yml up -d
-
-# Monitor services
-docker-compose -f docker-compose.prod.yml logs -f
-```
-
-### Kubernetes Deployment
-
-```bash
-# Apply Kubernetes manifests
-kubectl apply -f k8s/
-
-# Check deployment status
-kubectl get pods -n prism-core
-kubectl get services -n prism-core
-```
-
-## 🔒 Security
-
-### API Security
-
-- **Authentication**: JWT-based authentication
-- **Rate Limiting**: Configurable rate limits
-- **CORS**: Cross-origin resource sharing configuration
-- **Input Validation**: Comprehensive input sanitization
-
-### Data Security
-
-- **Encryption**: Data encryption at rest and in transit
-- **Access Control**: Role-based access control (RBAC)
-- **Audit Logging**: Comprehensive audit trails
-- **Backup**: Automated backup and recovery
-
-## 📈 Monitoring
-
-### Health Checks
-
-```bash
-# Service health
-curl http://localhost:8000/health
-
-# Vector DB status
-curl http://localhost:8000/api/vector-db/status
-
-# LLM service status
-curl http://localhost:8001/v1/models
-```
-
-### Metrics
-
-- **Prometheus**: Built-in metrics collection
-- **Grafana**: Dashboard for visualization
-- **Logging**: Structured logging with ELK stack support
-
-## 🤝 Contributing
-
-1. Fork the repository
-2. Create a feature branch (`git checkout -b feature/amazing-feature`)
-3. Commit your changes (`git commit -m 'Add amazing feature'`)
-4. Push to the branch (`git push origin feature/amazing-feature`)
-5. Open a Pull Request
-
-## 📄 License
-
-This project is licensed under the MIT License - see the [LICENSE](LICENSE) file for details.
-
-## 🆘 Support
-
-- **Issues**: [GitHub Issues](https://github.com/PRISM-System/prism-core/issues)
-- **Documentation**: [Wiki](https://github.com/PRISM-System/prism-core/wiki)
-- **Discussions**: [GitHub Discussions](https://github.com/PRISM-System/prism-core/discussions)
-
-## 🔗 Related Projects
-
-- **[PRISM-Orch](https://github.com/PRISM-System/PRISM-Orch)**: AI agent orchestration system
-- **[PRISM-AGI](https://github.com/PRISM-System/prism-agi)**: Main PRISM platform
-
----
-
-**PRISM-Core** - The foundation for intelligent manufacturing systems.

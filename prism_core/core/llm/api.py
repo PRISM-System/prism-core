@@ -78,7 +78,7 @@ def create_llm_router(agent_registry: AgentRegistry, llm_service: BaseLLMService
 
     @router.post("/agents/{agent_name}/invoke", response_model=AgentResponse)
     async def invoke_agent(
-        agent_name: str, 
+        agent_name: str,
         request: AgentInvokeRequest,
         registry: AgentRegistry = Depends(get_agent_registry),
         llm: BaseLLMService = Depends(get_llm_service),
@@ -88,13 +88,41 @@ def create_llm_router(agent_registry: AgentRegistry, llm_service: BaseLLMService
         agent = registry.get_agent(agent_name)
         if not agent:
             raise HTTPException(status_code=404, detail="Agent not found")
-            
-        # PrismLLMService인 경우 내장된 invoke_agent 메서드 사용 (권장)
+
+        # PrismLLMService인 경우 직접 LLM 호출 (순환 호출 방지)
         if isinstance(llm, PrismLLMService):
             # 도구 레지스트리 설정
             llm.tool_registry = tools_reg
-            return await llm.invoke_agent(agent, request)
-        
+
+            # 메시지 구성
+            messages = [
+                {"role": "system", "content": agent.role_prompt},
+                {"role": "user", "content": request.prompt}
+            ]
+
+            # LLM 요청 생성 및 직접 호출
+            llm_request = LLMGenerationRequest(
+                messages=messages,
+                max_tokens=request.max_tokens,
+                temperature=request.temperature,
+                stop=request.stop,
+                extra_body=request.extra_body
+            )
+
+            try:
+                generated_text = llm.generate(llm_request)
+                return AgentResponse(
+                    text=generated_text,
+                    tools_used=[],
+                    tool_results=[],
+                    metadata={
+                        "agent_name": agent_name,
+                        "direct_invocation": True
+                    }
+                )
+            except Exception as e:
+                raise HTTPException(status_code=500, detail=f"LLM generation failed: {str(e)}")
+
         # 다른 LLM 서비스를 위한 기본 구현 (폴백)
         llm_request = LLMGenerationRequest(
             prompt=agent.get_full_prompt(request.prompt, []),
@@ -109,7 +137,7 @@ def create_llm_router(agent_registry: AgentRegistry, llm_service: BaseLLMService
             metadata["session_id"] = request.session_id
         
         return AgentResponse(
-            text=generated_text, 
+            text=generated_text,
             tools_used=[],
             tool_results=[],
             metadata=metadata
@@ -242,15 +270,16 @@ def create_llm_router(agent_registry: AgentRegistry, llm_service: BaseLLMService
 
     @router.post("/generate", response_model=GenerationResponse)
     async def generate(
-        request: GenerationRequest,
+        request: LLMGenerationRequest,
         llm: BaseLLMService = Depends(get_llm_service),
     ):
         """Generate text based on a prompt."""
         llm_request = LLMGenerationRequest(
-            prompt=request.prompt,
+            messages=request.messages,
             max_tokens=request.max_tokens,
             temperature=request.temperature,
             stop=request.stop,
+            extra_body=request.extra_body
         )
         generated_text = llm.generate(llm_request)
         return GenerationResponse(text=generated_text)

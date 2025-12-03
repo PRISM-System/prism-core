@@ -189,7 +189,7 @@ class PrismLLMService(BaseLLMService):
             except Exception:
                 pass
 
-            url = f"{self.llm_service_url}/api/agents"
+            url = f"{self.llm_service_url}/core/api/agents"
             print(f"url: {url}")
             payload = {
                 "name": agent.name,
@@ -241,7 +241,7 @@ class PrismLLMService(BaseLLMService):
                 # If listing fails, proceed to try registering
                 pass
 
-            url = f"{self.llm_service_url}/api/tools"
+            url = f"{self.llm_service_url}/core/api/tools"
             payload = {
                 "name": tool.name,
                 "description": tool.description,
@@ -284,7 +284,7 @@ class PrismLLMService(BaseLLMService):
         에이전트에 도구 할당
         """
         try:
-            url = f"{self.llm_service_url}/api/agents/{agent_name}/tools"
+            url = f"{self.llm_service_url}/core/api/agents/{agent_name}/tools"
             payload = {"agent_name": agent_name, "tool_names": tool_names}
             response = self.session.post(url, json=payload)
             response.raise_for_status()
@@ -299,7 +299,7 @@ class PrismLLMService(BaseLLMService):
     
     def get_agents(self) -> List[Dict[str, Any]]:
         try:
-            url = f"{self.llm_service_url}/api/agents"
+            url = f"{self.llm_service_url}/core/api/agents"
             response = self.session.get(url)
             response.raise_for_status()
             return response.json()
@@ -313,10 +313,8 @@ class PrismLLMService(BaseLLMService):
     def get_tools(self) -> List[Dict[str, Any]]:
         import sys
         try:
-            url = f"{self.llm_service_url}/api/tools"
-            print(f"🔧 [GET-TOOLS-1] Requesting tools from: {url}", file=sys.stderr, flush=True)
-            response = self.session.get(url, timeout=10)
-            print(f"🔧 [GET-TOOLS-2] Response status: {response.status_code}", file=sys.stderr, flush=True)
+            url = f"{self.llm_service_url}/core/api/tools"
+            response = self.session.get(url)
             response.raise_for_status()
             result = response.json()
             print(f"🔧 [GET-TOOLS-3] Successfully retrieved {len(result)} tools", file=sys.stderr, flush=True)
@@ -360,9 +358,21 @@ class PrismLLMService(BaseLLMService):
             agent_name = agent.name if hasattr(agent, 'name') else str(agent)
             print(f"🔧 [INVOKE-1] Starting agent invocation with function calling: {agent_name}", file=sys.stderr, flush=True)
             
-            # Agent 도구 목록 확인
-            agent_tools = getattr(agent, 'tools', []) if hasattr(agent, 'tools') else []
-            use_tools = request.use_tools and len(agent_tools) > 0
+            url = f"{self.llm_service_url}/core/api/agents/{agent_name}/invoke"
+            payload = {
+                "prompt": request.prompt,
+                "max_tokens": request.max_tokens,
+                "temperature": request.temperature,
+                "stop": request.stop,
+                "use_tools": request.use_tools,
+                "max_tool_calls": getattr(request, "max_tool_calls", 3),
+                "extra_body": request.extra_body,
+                "tool_for_use": request.tool_for_use
+            }
+            
+            print(f"🔧 에이전트 호출: {url}")
+            print(f"   - 에이전트명: {agent_name}")
+            print(f"   - 프롬프트 길이: {len(request.prompt)}")
             
             print(f"🔧 [INVOKE-2] Agent tools: {agent_tools}, Use tools: {use_tools}", file=sys.stderr, flush=True)
             
